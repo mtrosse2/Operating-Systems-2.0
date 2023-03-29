@@ -66,19 +66,26 @@ char stack_ts_cv_push (struct ByteBlock * pBlock)
     /* Condition variable version */
     /* Your code goes here! */
     pthread_mutex_lock(&StackLock);
+		//printf("1\n");
 
 		while(StackSize >= STACK_MAX_SIZE){
-			printf("0\n");
 			pthread_cond_wait(&producer_wait, &StackLock);
 		}
 
+		//printf("2\n");
+		//if (KeepGoing == 0){
+		//	pthread_mutex_unlock(&StackLock);
+		//	return 0;
+		//}
 
 		StackItems[StackSize] = pBlock;
 		StackSize++;
 
+		//printf("3\n");
 		pthread_cond_broadcast(&consumer_wait);
 
 		pthread_mutex_unlock(&StackLock);
+		//printf("4\n");
     return 1;
 }
 
@@ -106,9 +113,13 @@ struct ByteBlock * stack_ts_cv_pop ()
 
 		pthread_mutex_lock(&StackLock);
 
-		while(StackSize <= 0){
-			printf("1\n");
+		while(StackSize <= 0 && KeepGoing == 1){
 			pthread_cond_wait(&consumer_wait, &StackLock);
+		}
+
+		if (KeepGoing == 0){
+			pthread_mutex_unlock(&StackLock);
+			return 0;
 		}
 
     pBlock = StackItems[StackSize-1];
@@ -210,6 +221,7 @@ void * thread_producer (void * pData)
         IterationsToGo--;
     }
 
+
 //    printf("Producer thread %d is done!\n", ThreadID);
     return NULL;
 }
@@ -236,6 +248,8 @@ void * thread_consumer (void * pData)
         if(CountDone == CountExpected)
         {
             pthread_mutex_unlock(&DoneLock);
+						KeepGoing = 0;
+						pthread_cond_broadcast(&consumer_wait);
             break;
         }
 
@@ -280,7 +294,9 @@ void * thread_consumer (void * pData)
         }     
     }
 
-//    printf("Consumer thread %d is done!\n", ThreadID);
+		KeepGoing = 0;
+		pthread_cond_broadcast(&consumer_wait);
+		// printf("Consumer thread %d is done!\n", ThreadID);
     return NULL;
 }
 
