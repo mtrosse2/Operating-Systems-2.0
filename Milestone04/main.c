@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/time.h>
 
 #include "byteblock.h"
 
@@ -25,7 +26,7 @@
 
 /* Use condition variables? */
 //  Uncomment to enable this
-/* #define USE_CONDITION_VARS      */
+#define USE_CONDITION_VARS
 
 
 
@@ -42,6 +43,10 @@ int                 CountDone = 0;
 pthread_mutex_t     DoneLock;
 
 int                 CountExpected = 0;
+
+// Define cond
+pthread_cond_t			consumer_wait;
+pthread_cond_t			producer_wait;
 
 struct ThreadDataProduce
 {
@@ -60,7 +65,21 @@ char stack_ts_cv_push (struct ByteBlock * pBlock)
 {
     /* Condition variable version */
     /* Your code goes here! */
-    return 0;
+    pthread_mutex_lock(&StackLock);
+
+		while(StackSize >= STACK_MAX_SIZE){
+			printf("0\n");
+			pthread_cond_wait(&producer_wait, &StackLock);
+		}
+
+
+		StackItems[StackSize] = pBlock;
+		StackSize++;
+
+		pthread_cond_broadcast(&consumer_wait);
+
+		pthread_mutex_unlock(&StackLock);
+    return 1;
 }
 
 char stack_ts_push (struct ByteBlock * pBlock)
@@ -83,7 +102,20 @@ char stack_ts_push (struct ByteBlock * pBlock)
 
 struct ByteBlock * stack_ts_cv_pop ()
 {
-    return NULL;
+		struct ByteBlock * pBlock;
+
+		pthread_mutex_lock(&StackLock);
+
+		while(StackSize <= 0){
+			printf("1\n");
+			pthread_cond_wait(&consumer_wait, &StackLock);
+		}
+
+    pBlock = StackItems[StackSize-1];
+		StackSize--;
+		pthread_cond_broadcast(&producer_wait);
+		pthread_mutex_unlock(&StackLock);
+		return pBlock;
 }
 
 struct ByteBlock * stack_ts_pop ()
@@ -273,10 +305,21 @@ int main (int argc, char *argv[])
     }
 
     // TODO: Measure start time here!
+		time_t start_time = time(NULL);
 
     nThreadsProducers = atoi(argv[1]);
     nThreadsConsumers = atoi(argv[2]);
     nIterations = atoi(argv[3]);
+
+		if(nThreadsProducers < 0 || nThreadsProducers > 20 || nThreadsConsumers < 0 || nThreadsConsumers > 20){
+			printf("Input a reasonable number of threads\n");
+			return -1;
+		}
+
+		if(nIterations < 0) {
+			printf("Input a positive number of iterations\n");
+			return -1;
+		}
 
     pthread_t *     pThreadProducers;
     pthread_t *     pThreadConsumers;
@@ -318,8 +361,10 @@ int main (int argc, char *argv[])
     }
 
     // TODO: Measure stop time here!
-    //  Output the total runtime in an appropriate unit
+		time_t end_time = time(NULL);
 
+    //  Output the total runtime in an appropriate unit
+		printf("Total run time: %ld seconds\n", end_time-start_time);
     printf("Drumroll please .... %d occurrences of `the'\n", CountFound);
 
 

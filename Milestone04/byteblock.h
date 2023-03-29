@@ -1,5 +1,6 @@
 /* Definition file for byteblock */
 
+#include <stdint.h>
 #include <sys/types.h>
 
 #ifndef __BYTEBLOCK_H
