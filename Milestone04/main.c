@@ -65,27 +65,22 @@ char stack_ts_cv_push (struct ByteBlock * pBlock)
 {
     /* Condition variable version */
     /* Your code goes here! */
-    pthread_mutex_lock(&StackLock);
-		//printf("1\n");
 
+		// Lock
+    pthread_mutex_lock(&StackLock);
+
+		// Wait while the stack is full
 		while(StackSize >= STACK_MAX_SIZE){
 			pthread_cond_wait(&producer_wait, &StackLock);
 		}
 
-		//printf("2\n");
-		//if (KeepGoing == 0){
-		//	pthread_mutex_unlock(&StackLock);
-		//	return 0;
-		//}
-
+		//Add to the stack and broadcast to consumer
 		StackItems[StackSize] = pBlock;
 		StackSize++;
 
-		//printf("3\n");
 		pthread_cond_broadcast(&consumer_wait);
 
 		pthread_mutex_unlock(&StackLock);
-		//printf("4\n");
     return 1;
 }
 
@@ -111,17 +106,21 @@ struct ByteBlock * stack_ts_cv_pop ()
 {
 		struct ByteBlock * pBlock;
 
+		// Lock
 		pthread_mutex_lock(&StackLock);
 
+		// Wait while the stack is empty and it is still producing
 		while(StackSize <= 0 && KeepGoing == 1){
 			pthread_cond_wait(&consumer_wait, &StackLock);
 		}
 
+		// If there is nothing consume then return NULL
 		if (KeepGoing == 0){
 			pthread_mutex_unlock(&StackLock);
-			return 0;
+			return NULL;
 		}
 
+		// Pop from the stack and return the pBlock;
     pBlock = StackItems[StackSize-1];
 		StackSize--;
 		pthread_cond_broadcast(&producer_wait);
@@ -134,7 +133,6 @@ struct ByteBlock * stack_ts_pop ()
     struct ByteBlock * pBlock;
 
     pthread_mutex_lock(&StackLock);
-
     if(StackSize > 0)
     {
         pBlock = StackItems[StackSize-1];
@@ -155,14 +153,14 @@ void * thread_producer (void * pData)
     int     IterationsToGo;
     int     nRandom;
     struct ByteBlock *  pBlock;
-    int     ThreadID;
+    // int     ThreadID;
 
     struct ThreadDataProduce * pThreadData;
 
     pThreadData = (struct ThreadDataProduce *) pData;
 
     IterationsToGo = pThreadData->Iterations;
-    ThreadID = pThreadData->ThreadID;
+    //ThreadID = pThreadData->ThreadID;
 
     /* Copied - get rid of the malloc'd allocation */
     free(pThreadData);
@@ -222,7 +220,9 @@ void * thread_producer (void * pData)
     }
 
 
-//    printf("Producer thread %d is done!\n", ThreadID);
+		// printf("Producer thread %d is done!\n", ThreadID);
+		// done_producing = 1;
+		// printf("%d, %d\n", StackSize, IterationsToGo);
     return NULL;
 }
 
@@ -232,11 +232,11 @@ void * thread_consumer (void * pData)
     struct ThreadDataConsume * pThreadData;
     char * SearchString;
     struct ByteBlock * pBlock;
-    int     ThreadID;
+    // int     ThreadID;
 
     pThreadData = (struct ThreadDataConsume *) pData;
 
-    ThreadID = pThreadData->ThreadID;
+    //ThreadID = pThreadData->ThreadID;
     SearchString = (char *) pThreadData->SearchString;
 
     /* Copied - get rid of the malloc'd allocation */
@@ -248,8 +248,8 @@ void * thread_consumer (void * pData)
         if(CountDone == CountExpected)
         {
             pthread_mutex_unlock(&DoneLock);
-						KeepGoing = 0;
-						pthread_cond_broadcast(&consumer_wait);
+						// KeepGoing = 0;
+						// pthread_cond_broadcast(&consumer_wait);
             break;
         }
 
