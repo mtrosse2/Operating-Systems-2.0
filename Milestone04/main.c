@@ -35,6 +35,7 @@ pthread_mutex_t     StackLock;
 struct ByteBlock *  StackItems[STACK_MAX_SIZE];
 int                 StackSize = 0;
 char                KeepGoing = 1;
+char								dont_stop = 1;
 
 int                 CountFound = 0;
 pthread_mutex_t     FoundLock;
@@ -110,12 +111,12 @@ struct ByteBlock * stack_ts_cv_pop ()
 		pthread_mutex_lock(&StackLock);
 
 		// Wait while the stack is empty and it is still producing
-		while(StackSize <= 0 && KeepGoing == 1){
+		while(StackSize <= 0 && dont_stop == 1){
 			pthread_cond_wait(&consumer_wait, &StackLock);
 		}
 
 		// If there is nothing consume then return NULL
-		if (KeepGoing == 0){
+		if (dont_stop == 0){
 			pthread_mutex_unlock(&StackLock);
 			return NULL;
 		}
@@ -294,7 +295,7 @@ void * thread_consumer (void * pData)
         }     
     }
 
-		KeepGoing = 0;
+		dont_stop = 0;
 		pthread_cond_broadcast(&consumer_wait);
 		// printf("Consumer thread %d is done!\n", ThreadID);
     return NULL;
