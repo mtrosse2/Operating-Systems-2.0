@@ -5,8 +5,9 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <string.h>
+#include <stdint.h>
 #include <sys/types.h>
-#include <sys/time.h>
+#include <time.h>
 
 #include "byteblock.h"
 
@@ -35,7 +36,6 @@ pthread_mutex_t     StackLock;
 struct ByteBlock *  StackItems[STACK_MAX_SIZE];
 int                 StackSize = 0;
 char                KeepGoing = 1;
-char								dont_stop = 1;
 
 int                 CountFound = 0;
 pthread_mutex_t     FoundLock;
@@ -46,8 +46,8 @@ pthread_mutex_t     DoneLock;
 int                 CountExpected = 0;
 
 // Define cond
-pthread_cond_t			consumer_wait;
-pthread_cond_t			producer_wait;
+pthread_cond_t			ConsumerWait;
+pthread_cond_t			ProducerWait;
 
 struct ThreadDataProduce
 {
@@ -67,21 +67,19 @@ char stack_ts_cv_push (struct ByteBlock * pBlock)
     /* Condition variable version */
     /* Your code goes here! */
 
-		// Lock
+    // lock
     pthread_mutex_lock(&StackLock);
 
-		// Wait while the stack is full
-		while(StackSize >= STACK_MAX_SIZE){
-			pthread_cond_wait(&producer_wait, &StackLock);
-		}
+    while (StackSize >= STACK_MAX_SIZE) {
+        pthread_cond_wait(&ProducerWait, &StackLock);
+    }
 
-		//Add to the stack and broadcast to consumer
-		StackItems[StackSize] = pBlock;
-		StackSize++;
+    StackItems[StackSize] = pBlock;
+    StackSize++;
+    pthread_cond_broadcast(&ConsumerWait);
 
-		pthread_cond_broadcast(&consumer_wait);
-
-		pthread_mutex_unlock(&StackLock);
+    // unlock
+    pthread_mutex_unlock(&StackLock);  
     return 1;
 }
 
@@ -105,28 +103,26 @@ char stack_ts_push (struct ByteBlock * pBlock)
 
 struct ByteBlock * stack_ts_cv_pop ()
 {
-		struct ByteBlock * pBlock;
+    struct ByteBlock * pBlock;
 
-		// Lock
-		pthread_mutex_lock(&StackLock);
+    pthread_mutex_lock(&StackLock);
+    
+    while (StackSize <= 0 && CountExpected != CountDone) {
+        pthread_cond_wait(&ConsumerWait, &StackLock);
+    }
 
-		// Wait while the stack is empty and it is still producing
-		while(StackSize <= 0 && dont_stop == 1){
-			pthread_cond_wait(&consumer_wait, &StackLock);
-		}
+    if (CountExpected == CountDone) {
+        pthread_cond_broadcast(&ConsumerWait);
+        pthread_mutex_unlock(&StackLock);
+        return NULL;
+    }
 
-		// If there is nothing consume then return NULL
-		if (dont_stop == 0){
-			pthread_mutex_unlock(&StackLock);
-			return NULL;
-		}
-
-		// Pop from the stack and return the pBlock;
     pBlock = StackItems[StackSize-1];
-		StackSize--;
-		pthread_cond_broadcast(&producer_wait);
-		pthread_mutex_unlock(&StackLock);
-		return pBlock;
+    StackSize--;
+
+    pthread_cond_broadcast(&ProducerWait);
+    pthread_mutex_unlock(&StackLock);
+    return pBlock;
 }
 
 struct ByteBlock * stack_ts_pop ()
@@ -134,6 +130,7 @@ struct ByteBlock * stack_ts_pop ()
     struct ByteBlock * pBlock;
 
     pthread_mutex_lock(&StackLock);
+
     if(StackSize > 0)
     {
         pBlock = StackItems[StackSize-1];
@@ -154,14 +151,14 @@ void * thread_producer (void * pData)
     int     IterationsToGo;
     int     nRandom;
     struct ByteBlock *  pBlock;
-    // int     ThreadID;
+    int     ThreadID;
 
     struct ThreadDataProduce * pThreadData;
 
     pThreadData = (struct ThreadDataProduce *) pData;
 
     IterationsToGo = pThreadData->Iterations;
-    //ThreadID = pThreadData->ThreadID;
+    ThreadID = pThreadData->ThreadID;
 
     /* Copied - get rid of the malloc'd allocation */
     free(pThreadData);
@@ -220,10 +217,7 @@ void * thread_producer (void * pData)
         IterationsToGo--;
     }
 
-
-		// printf("Producer thread %d is done!\n", ThreadID);
-		// done_producing = 1;
-		// printf("%d, %d\n", StackSize, IterationsToGo);
+    pthread_cond_broadcast(&ConsumerWait);
     return NULL;
 }
 
@@ -233,11 +227,11 @@ void * thread_consumer (void * pData)
     struct ThreadDataConsume * pThreadData;
     char * SearchString;
     struct ByteBlock * pBlock;
-    // int     ThreadID;
+    int     ThreadID;
 
     pThreadData = (struct ThreadDataConsume *) pData;
 
-    //ThreadID = pThreadData->ThreadID;
+    ThreadID = pThreadData->ThreadID;
     SearchString = (char *) pThreadData->SearchString;
 
     /* Copied - get rid of the malloc'd allocation */
@@ -249,8 +243,6 @@ void * thread_consumer (void * pData)
         if(CountDone == CountExpected)
         {
             pthread_mutex_unlock(&DoneLock);
-						// KeepGoing = 0;
-						// pthread_cond_broadcast(&consumer_wait);
             break;
         }
 
@@ -295,14 +287,12 @@ void * thread_consumer (void * pData)
         }     
     }
 
-		dont_stop = 0;
-		pthread_cond_broadcast(&consumer_wait);
-		// printf("Consumer thread %d is done!\n", ThreadID);
+    pthread_cond_broadcast(&ConsumerWait);
     return NULL;
 }
 
 int main (int argc, char *argv[])
-{    
+{
     int     nThreadsProducers;
     int     nThreadsConsumers;   
     int     nIterations;
@@ -311,6 +301,9 @@ int main (int argc, char *argv[])
     pthread_mutex_init(&StackLock, 0);
     pthread_mutex_init(&FoundLock, 0);
     pthread_mutex_init(&DoneLock, 0);
+
+    pthread_cond_init(&ConsumerWait, NULL);
+    pthread_cond_init(&ProducerWait, NULL);
 
     if(argc < 4)
     {
@@ -322,21 +315,21 @@ int main (int argc, char *argv[])
     }
 
     // TODO: Measure start time here!
-		time_t start_time = time(NULL);
+    time_t start_time = time(NULL);
 
     nThreadsProducers = atoi(argv[1]);
     nThreadsConsumers = atoi(argv[2]);
     nIterations = atoi(argv[3]);
 
-		if(nThreadsProducers < 0 || nThreadsProducers > 20 || nThreadsConsumers < 0 || nThreadsConsumers > 20){
-			printf("Input a reasonable number of threads\n");
-			return -1;
-		}
+	if(nThreadsProducers < 0 || nThreadsProducers > 20 || nThreadsConsumers < 0 || nThreadsConsumers > 20){
+		printf("Input a reasonable number of threads\n");
+		return -1;
+	}
 
-		if(nIterations < 0) {
-			printf("Input a positive number of iterations\n");
-			return -1;
-		}
+	if(nIterations < 0) {
+		printf("Input a positive number of iterations\n");
+		return -1;
+	}
 
     pthread_t *     pThreadProducers;
     pthread_t *     pThreadConsumers;
@@ -378,13 +371,13 @@ int main (int argc, char *argv[])
     }
 
     // TODO: Measure stop time here!
-		time_t end_time = time(NULL);
+    time_t end_time = time(NULL);
 
     //  Output the total runtime in an appropriate unit
-		printf("Total run time: %ld seconds\n", end_time-start_time);
+    printf("Total run time: %lf seconds\n", (double)(end_time - start_time));
+
     printf("Drumroll please .... %d occurrences of `the'\n", CountFound);
 
 
     return 0;
 }
-
