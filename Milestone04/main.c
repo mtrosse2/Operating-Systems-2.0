@@ -27,7 +27,7 @@
 
 /* Use condition variables? */
 //  Uncomment to enable this
-#define USE_CONDITION_VARS
+// #define USE_CONDITION_VARS
 
 
 
@@ -151,14 +151,14 @@ void * thread_producer (void * pData)
     int     IterationsToGo;
     int     nRandom;
     struct ByteBlock *  pBlock;
-    int     ThreadID;
+    // int     ThreadID;
 
     struct ThreadDataProduce * pThreadData;
 
     pThreadData = (struct ThreadDataProduce *) pData;
 
     IterationsToGo = pThreadData->Iterations;
-    ThreadID = pThreadData->ThreadID;
+    // ThreadID = pThreadData->ThreadID;
 
     /* Copied - get rid of the malloc'd allocation */
     free(pThreadData);
@@ -227,11 +227,11 @@ void * thread_consumer (void * pData)
     struct ThreadDataConsume * pThreadData;
     char * SearchString;
     struct ByteBlock * pBlock;
-    int     ThreadID;
+    // int     ThreadID;
 
     pThreadData = (struct ThreadDataConsume *) pData;
 
-    ThreadID = pThreadData->ThreadID;
+    // ThreadID = pThreadData->ThreadID;
     SearchString = (char *) pThreadData->SearchString;
 
     /* Copied - get rid of the malloc'd allocation */
