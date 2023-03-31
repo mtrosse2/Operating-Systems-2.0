@@ -23,4 +23,4 @@ Runs with 10 producers and 25000 iterations WITH condition variables:
   <li>10 Consumers : (4s + 4s + 4s) / 3 = 4s</li>
 </ul>
 
-Using conditional variables led to a speed up on average compared to its non condition variable counterpart
+Using conditional variables led to a speed up on average compared to its non condition variable counterpart. By not simply spinning when the lock was not obtained, the threads were able to run more efficiently when using condition variables.
