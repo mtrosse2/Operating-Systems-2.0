@@ -11,9 +11,30 @@ char * strdup(const char *s);
 #include "pcap-read.h"
 #include "pcap-process.h"
 
+pthread_mutex_t stacklock;
+struct Packet *stack[100000]; // need array type and size CHANGE LATER
+pthread_cond_t consumer_wait;
+pthread_cond_t producer_wait;
+int num_threads = 1;
+int num_consumers = 1;
+int num_producers = 1;
+
+
+
+struct ThreadDataProduce
+{
+    int Iterations;
+    int ThreadID;
+};
+
+struct ThreadDataConsume
+{
+    int ThreadID;
+    char * SearchString;
+};
 
 int main (int argc, char *argv[])
-{ 
+{	 
     if(argc < 2)
     {
         printf("Usage: redextract FileX\n");
@@ -33,6 +54,25 @@ int main (int argc, char *argv[])
         return -1;
     }
 
+		// INITIALIZE VARIABLES
+	
+		pthread_mutex_init(&StackLock,0);
+		pthread_cond_init(&consumer_wait, NULL);
+		pthread_cond_init(&producer_wait, NULL);
+
+
+		// PARSE COMMAND LINE ARGUMENTS ./executable filename -threads thead_num
+		i = 1
+		while(i < argc){
+			if(i == 1){
+				
+			}
+			else if(i == 2){
+				if( strcmp('-thread', argv[i]) // THIS IS WRONG BUT THE IDEAS RIGHT
+			}
+		}
+		
+		
     printf("MAIN: Initializing the table for redundancy extraction\n");
     initializeProcessing(DEFAULT_TABLE_SIZE);
     printf("MAIN: Initializing the table for redundancy extraction ... done\n");
