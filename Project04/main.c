@@ -10,7 +10,6 @@
 char * strdup(const char *s);
 
 #include <string.h>
-
 #include "pcap-read.h"
 #include "pcap-process.h"
 
@@ -26,6 +25,7 @@ int num_threads = 1;
 int window_size = 1;
 int num_consumers = 1;
 int num_producers = 1;
+int stackSize = 0;
 
 
 
@@ -48,6 +48,74 @@ char* extension(char* filename) {
     }
     return "";
 }
+
+
+// My work start
+
+char producer_readPcapFile(struct FilePcapInfo * pFileInfo){
+
+	FILE * pTheFile;
+	struct Packet * pPacket;
+
+	/* Default is to not flip due to endian-ness issues */
+	pFileInfo->EndianFlip = 0;
+
+	/* Reset the counters */
+	pFileInfo->Packets = 0;
+	pFileInfo->BytesRead = 0;
+
+	/* Open the file and its respective front matter */
+	pTheFile = fopen(pFileInfo->FileName, "r");
+
+	/* Read the front matter */
+	if(!parsePcapFileStart(pTheFile, pFileInfo))
+	{
+		printf("* Error: Failed to parse front matter on pcap file %s\n", pFileInfo->FileName);
+		return 0;
+	}
+	while(!feof(pTheFile)){
+		pPacket = readNextPacket(pTheFile, pFileInfo);
+		pthread_mutex_lock(&StackLock);
+
+		while(stackSize >= STACK_MAX_SIZE){
+			pthread_cond_wait(&producer_wait, &StackLock);
+		}
+
+		Stack[stackSize] = pPacket;
+		stackSize++;
+		pthread_cond_broadcast(&consumer_wait);
+		pthread_mutex_unlock(&StackLock);
+	}
+	fclose(pTheFile);
+}
+
+// not too sure what to return
+struct * Packet consumer_readPcapFile(){
+	pthread_mutex_lock(&StackLock);
+	while(stackSize <= 0){	// while stack is empty
+		pthread_cond_wait(&consumer_wait, &StackLock);
+	}
+	if(){} // if we are have popped everything in stack
+
+	poc = Stack[StackSize-1];
+	StackSize--;
+	if(poc != NULL){
+		processPacket(poc);
+	}
+	/* Allow for an early bail out if specified */
+	if(pFileInfo->MaxPackets != 0)
+	{
+		if(pFileInfo->Packets >= pFileInfo->MaxPackets)
+		{
+			break;
+		}
+	}
+	pthread_mutex_unlock(&StackLock);
+	// need to return something
+}
+
+
+// My work end
 
 int main (int argc, char *argv[])
 {	 
@@ -184,6 +252,7 @@ int main (int argc, char *argv[])
      * - Displays the end results
      */
 
+// hopefully need to change these to producer_readPcapFile()
     for (i = 0; i < numPcapFiles; i++) {
         printf("MAIN: Attempting to read in the file named %s\n", theInfo[i].FileName);
         readPcapFile(&theInfo[i]);
