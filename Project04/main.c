@@ -28,6 +28,7 @@ int num_producers = 1;
 int stackSize = 0;
 int isdone = 0;
 int nThreadsConsumers = 1;
+int nThreadsProducers = 2;
 
 #define STACK_MAX_SIZE 7
 
@@ -56,8 +57,7 @@ char* extension(char* filename) {
 
 // My work start
 
-void * thread_producer(void * pThreadData){
-	printf("In Dis Hoe Bitch\n");
+void * thread_producer(void *pThreadData){
 	struct ThreadDataProduce * pData;
 	pData = (struct ThreadDataProduce *) pThreadData;
 	struct FilePcapInfo * pFileInfo;
@@ -80,17 +80,20 @@ void * thread_producer(void * pThreadData){
 	if(!parsePcapFileStart(pTheFile, pFileInfo))
 	{
 		printf("* Error: Failed to parse front matter on pcap file %s\n", pFileInfo->FileName);
-		pthread_mutex_unlock(&StackLock);
+		// pthread_mutex_unlock(&StackLock);
 		return NULL;
 	}
 	while(!feof(pTheFile)){
-		printf("Readin Bitch\n");
+		//printf("Readin Bitch\n");
 		pPacket = readNextPacket(pTheFile, pFileInfo);
 		pthread_mutex_lock(&StackLock);
 
-		while(stackSize >= STACK_MAX_SIZE){
+		while(stackSize >= STACK_MAX_SIZE && isdone == 0){
 			pthread_cond_wait(&producer_wait, &StackLock);
 		}
+
+		if(isdone == 1)
+			break;
 
 		stack[stackSize] = pPacket;
 		stackSize++;
@@ -99,27 +102,33 @@ void * thread_producer(void * pThreadData){
 	}
 	fclose(pTheFile);
 	isdone = 1;
+	printf("");
+	pthread_cond_broadcast(&consumer_wait);
+	pthread_mutex_unlock(&StackLock);
+	return NULL;
 }
 
 // not too sure what to return
-void * thread_consumer(){
-	printf("In Here\n");
+void  *thread_consumer(void *arg){
 	while(1){
-		printf("Consumin bitch\n");
+		//printf("Consumin bitch\n");
 		pthread_mutex_lock(&StackLock);
 		while(stackSize <= 0 && isdone == 0){	// while stack is empty
+			//printf("Wait\n");
 			pthread_cond_wait(&consumer_wait, &StackLock);
 		}
-		if(isdone == 1 && stackSize == 0){
+		if(isdone == 1 && stackSize <= 0){
 			pthread_mutex_unlock(&StackLock);
 			break;
 		}
 		struct Packet * poc;
 		poc = stack[stackSize-1];
 		stackSize--;
+		
 		if(poc != NULL){
 			processPacket(poc);
 		}
+
 		/* Allow for an early bail out if specified */
 		/*
 		if(pFileInfo->MaxPackets != 0)
@@ -130,11 +139,13 @@ void * thread_consumer(){
 			}
 		}
 		*/
-		pthread_cond_signal(&producer_wait);
+		pthread_cond_broadcast(&producer_wait);
 		pthread_mutex_unlock(&StackLock);
 		// need to return something
 	}
 	pthread_cond_broadcast(&consumer_wait);
+	printf("Consumer done\n");
+	return NULL;
 }
 
 
@@ -280,26 +291,23 @@ int main (int argc, char *argv[])
 		pthread_t * pThreadConsumers;
 		pthread_t * pThreadProducers;
 		pThreadConsumers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsConsumers ); // Need to change this to number of consumers later
-		// pThreadProducers = (pthread_t *) malloc(sizeof(pthread_t *) * 1);
+		pThreadProducers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsProducers);
 		
-		printf("entering loop\n");
-		pthread_t PID;
+		struct ThreadDataProduce * pThreadData[nThreadsProducers]; // Change to number of producers
+		
+		nThreadsConsumers += 1;
+		pthread_t PID = 0;
     for (i = 0; i < numPcapFiles; i++) {
 				int k = 0;
-				// for(k=0; k < 1; k++){
-					struct ThreadDataProduce * pThreadData;
-					pThreadData->ThreadID = PID;
-					pThreadData->PcapInfo = &theInfo[i];
-					printf("about to create\n");
-					pthread_create(&PID, 0, thread_producer, (void *) pThreadData);
-					// pthread_create(pThreadProducers+k, NULL, thread_producer, (void *) pThreadData);
-					// pthread_create(pThreadProducers+k, 0, thread_producer, NULL);
-				// }
-				printf("before consumer\n");
+				for(k=0; k < nThreadsProducers; k++){
+					pThreadData[k] = malloc(sizeof(struct ThreadDataProduce));
+					pThreadData[k]->ThreadID = PID;
+					pThreadData[k]->PcapInfo = &theInfo[i];
+					pthread_create(pThreadProducers+k, NULL, thread_producer, (void *) pThreadData[k]);
+				 }
 				for(k=0; k < nThreadsConsumers; k++){
-					pthread_create(pThreadConsumers+k, NULL, thread_consumer, NULL);
+					pthread_create(pThreadConsumers+k, NULL, &thread_consumer, NULL);
 				}
-				printf("before join\n");
 				for(k = 0; k < nThreadsConsumers; k++){
 					pthread_join(pThreadConsumers[k], NULL);
 				}
