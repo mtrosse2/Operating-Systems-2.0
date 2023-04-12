@@ -10,7 +10,6 @@
 char * strdup(const char *s);
 
 #include <string.h>
-
 #include "pcap-read.h"
 #include "pcap-process.h"
 
@@ -26,12 +25,17 @@ int num_threads = 1;
 int window_size = 1;
 int num_consumers = 1;
 int num_producers = 1;
+int stackSize = 0;
+int isdone = 0;
+int nThreadsConsumers = 1;
+
+#define STACK_MAX_SIZE 7
 
 
 
 struct ThreadDataProduce
 {
-    int Iterations;
+    struct FilePcapInfo * PcapInfo;
     int ThreadID;
 };
 
@@ -48,6 +52,93 @@ char* extension(char* filename) {
     }
     return "";
 }
+
+
+// My work start
+
+void * thread_producer(void * pThreadData){
+	printf("In Dis Hoe Bitch\n");
+	struct ThreadDataProduce * pData;
+	pData = (struct ThreadDataProduce *) pThreadData;
+	struct FilePcapInfo * pFileInfo;
+	pFileInfo = (struct FilePcapInfo *) pData->PcapInfo;
+	
+	FILE * pTheFile;
+	struct Packet * pPacket;
+
+	/* Default is to not flip due to endian-ness issues */
+	pFileInfo->EndianFlip = 0;
+
+	/* Reset the counters */
+	pFileInfo->Packets = 0;
+	pFileInfo->BytesRead = 0;
+
+	/* Open the file and its respective front matter */
+	pTheFile = fopen(pFileInfo->FileName, "r");
+
+	/* Read the front matter */
+	if(!parsePcapFileStart(pTheFile, pFileInfo))
+	{
+		printf("* Error: Failed to parse front matter on pcap file %s\n", pFileInfo->FileName);
+		pthread_mutex_unlock(&StackLock);
+		return NULL;
+	}
+	while(!feof(pTheFile)){
+		printf("Readin Bitch\n");
+		pPacket = readNextPacket(pTheFile, pFileInfo);
+		pthread_mutex_lock(&StackLock);
+
+		while(stackSize >= STACK_MAX_SIZE){
+			pthread_cond_wait(&producer_wait, &StackLock);
+		}
+
+		stack[stackSize] = pPacket;
+		stackSize++;
+		pthread_cond_broadcast(&consumer_wait);
+		pthread_mutex_unlock(&StackLock);
+	}
+	fclose(pTheFile);
+	isdone = 1;
+}
+
+// not too sure what to return
+void * thread_consumer(){
+	printf("In Here\n");
+	while(1){
+		printf("Consumin bitch\n");
+		pthread_mutex_lock(&StackLock);
+		while(stackSize <= 0 && isdone == 0){	// while stack is empty
+			pthread_cond_wait(&consumer_wait, &StackLock);
+		}
+		if(isdone == 1 && stackSize == 0){
+			pthread_mutex_unlock(&StackLock);
+			break;
+		}
+		struct Packet * poc;
+		poc = stack[stackSize-1];
+		stackSize--;
+		if(poc != NULL){
+			processPacket(poc);
+		}
+		/* Allow for an early bail out if specified */
+		/*
+		if(pFileInfo->MaxPackets != 0)
+		{
+			if(pFileInfo->Packets >= pFileInfo->MaxPackets)
+			{
+				break;
+			}
+		}
+		*/
+		pthread_cond_signal(&producer_wait);
+		pthread_mutex_unlock(&StackLock);
+		// need to return something
+	}
+	pthread_cond_broadcast(&consumer_wait);
+}
+
+
+// My work end
 
 int main (int argc, char *argv[])
 {	 
@@ -75,9 +166,9 @@ int main (int argc, char *argv[])
 	pthread_cond_init(&consumer_wait, NULL);
 	pthread_cond_init(&producer_wait, NULL);
 
-    struct FilePcapInfo * theInfo = (struct FilePcapInfo *) malloc(sizeof(struct FilePcapInfo) * MAX_PCAP_FILES);
-    int numPcapFiles = 0;
-    char buffer[MAX_FILE_LEN];
+   struct FilePcapInfo * theInfo = (struct FilePcapInfo *) malloc(sizeof(struct FilePcapInfo) * MAX_PCAP_FILES);
+   int numPcapFiles = 0;
+   char buffer[MAX_FILE_LEN];
 
 	// PARSE COMMAND LINE ARGUMENTS
 	int i = 1;
@@ -184,12 +275,41 @@ int main (int argc, char *argv[])
      * - Displays the end results
      */
 
+
+		
+		pthread_t * pThreadConsumers;
+		pthread_t * pThreadProducers;
+		pThreadConsumers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsConsumers ); // Need to change this to number of consumers later
+		// pThreadProducers = (pthread_t *) malloc(sizeof(pthread_t *) * 1);
+		
+		printf("entering loop\n");
+		pthread_t PID;
     for (i = 0; i < numPcapFiles; i++) {
+				int k = 0;
+				// for(k=0; k < 1; k++){
+					struct ThreadDataProduce * pThreadData;
+					pThreadData->ThreadID = PID;
+					pThreadData->PcapInfo = &theInfo[i];
+					printf("about to create\n");
+					pthread_create(&PID, 0, thread_producer, (void *) pThreadData);
+					// pthread_create(pThreadProducers+k, NULL, thread_producer, (void *) pThreadData);
+					// pthread_create(pThreadProducers+k, 0, thread_producer, NULL);
+				// }
+				printf("before consumer\n");
+				for(k=0; k < nThreadsConsumers; k++){
+					pthread_create(pThreadConsumers+k, NULL, thread_consumer, NULL);
+				}
+				printf("before join\n");
+				for(k = 0; k < nThreadsConsumers; k++){
+					pthread_join(pThreadConsumers[k], NULL);
+				}
+				/*
         printf("MAIN: Attempting to read in the file named %s\n", theInfo[i].FileName);
         readPcapFile(&theInfo[i]);
 
         printf("MAIN: Attempting to read in the file named %s again\n", theInfo[i].FileName);
         readPcapFile(&theInfo[i]);
+				*/
 
         printf("Summarizing the processed entries\n");
         tallyProcessing();
