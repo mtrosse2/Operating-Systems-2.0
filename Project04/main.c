@@ -18,6 +18,7 @@ char * strdup(const char *s);
 #define OUR_MAX_PACKETS 5
 
 pthread_mutex_t StackLock;
+
 struct Packet *stack[8]; // need array type and size CHANGE LATER
 pthread_cond_t consumer_wait;
 pthread_cond_t producer_wait;
