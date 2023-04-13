@@ -14,7 +14,7 @@ char * strdup(const char *s);
 #include "pcap-process.h"
 
 #define MAX_PCAP_FILES 4
-#define MAX_FILE_LEN 20
+#define MAX_FILE_LEN 40
 #define OUR_MAX_PACKETS 0
 #define STACK_MAX_SIZE 7
 
@@ -71,7 +71,7 @@ void * thread_producer(void *pThreadData){
 
 	/* Open the file and its respective front matter */
 	pTheFile = fopen(pFileInfo->FileName, "r");
-    printf("opening file\n");
+    // printf("opening file\n");
 
 	/* Read the front matter */
 	if(!parsePcapFileStart(pTheFile, pFileInfo))
@@ -186,6 +186,9 @@ int main (int argc, char *argv[])
                 if (strcmp(buffer, "\n") == 0) {
                     memset(buffer, 0, sizeof(buffer));
                     continue;
+                }
+                if (buffer[strlen(buffer)-1] == '\n') {
+                    buffer[strlen(buffer)-1] = '\0';
                 }
                 theInfo[numPcapFiles].FileName = buffer;
                 theInfo[numPcapFiles].EndianFlip = 0;
