@@ -18,7 +18,7 @@ char * strdup(const char *s);
 #define OUR_MAX_PACKETS 5
 
 pthread_mutex_t StackLock;
-struct Packet *stack[100000]; // need array type and size CHANGE LATER
+struct Packet *stack[8]; // need array type and size CHANGE LATER
 pthread_cond_t consumer_wait;
 pthread_cond_t producer_wait;
 int num_threads = 1;
@@ -31,8 +31,6 @@ int nThreadsConsumers = 1;
 int nThreadsProducers = 2;
 
 #define STACK_MAX_SIZE 7
-
-
 
 struct ThreadDataProduce
 {
@@ -84,7 +82,7 @@ void * thread_producer(void *pThreadData){
 		return NULL;
 	}
 	while(!feof(pTheFile)){
-		//printf("Readin Bitch\n");
+		// printf("Readin Bitch\n");
 		pPacket = readNextPacket(pTheFile, pFileInfo);
 		pthread_mutex_lock(&StackLock);
 
@@ -111,7 +109,7 @@ void * thread_producer(void *pThreadData){
 // not too sure what to return
 void  *thread_consumer(void *arg){
 	while(1){
-		//printf("Consumin bitch\n");
+		// printf("Consumin bitch\n");
 		pthread_mutex_lock(&StackLock);
 		while(stackSize <= 0 && isdone == 0){	// while stack is empty
 			//printf("Wait\n");

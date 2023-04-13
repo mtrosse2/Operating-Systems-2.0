@@ -10,6 +10,12 @@
 #define MAX_KEY_LEN 100
 #define MAX_VALUE_LEN 100
 
+#define TABLE_SIZE 100
+
+struct hash_table {
+    struct PacketEntry *table[TABLE_SIZE];
+};
+
 
 /* How many packets have we seen? */
 uint32_t        gPacketSeenCount;
@@ -24,11 +30,102 @@ uint32_t        gPacketHitCount;
 uint64_t        gPacketHitBytes;
 
 /* Our big table for recalling packets */
-struct PacketEntry *    BigTable; 
-int    BigTableSize;
-int    BigTableNextToReplace;
+// struct PacketEntry *    BigTable; 
+// int    BigTableSize;
+// int    BigTableNextToReplace;
 
+struct hash_table TheHash;
 
+// https://en.wikipedia.org/wiki/Jenkins_hash_function
+uint32_t jenkins_16bit(uint16_t key) {
+    uint32_t hash = 0;
+    hash += key;
+    hash += hash << 10;
+    hash ^= hash >> 6;
+    hash += hash << 3;
+    hash ^= hash >> 11;
+    hash += hash << 15;
+    return hash;
+}
+
+unsigned int hashData(int netPayload) {
+    unsigned int hash_value = jenkins_16bit(netPayload);
+    // get hash_value from jenkins hash using PacketEntry->ThePacket->Data + PacketEntry->ThePacket->PayloadOffset (ie. netPayload)
+    return hash_value % TABLE_SIZE;
+}
+
+int getNetPayload(struct PacketEntry * pEntry){
+    return pEntry->ThePacket->LengthIncluded - pEntry->ThePacket->PayloadOffset;
+}
+
+// struct PacketEntry * create_node(struct PacketEntry * pEntry) {
+//     struct PacketEntry * new_node = malloc(sizeof(struct PacketEntry));
+//     new_node->ThePacket = pEntry->ThePacket;
+//     new_node->key = getNetPayload(pEntry);
+//     new_node->value = hashData(getNetPayload(pEntry));
+//     return new_node;
+// }
+
+void insert(struct hash_table * ht, struct PacketEntry * pEntry ) {
+    unsigned int index = hashData(getNetPayload(pEntry));
+    struct PacketEntry * existing = ht->table[index];
+
+    // struct PacketEntry * new_node = create_node(pEntry);
+    struct PacketEntry * new_node = pEntry;
+    new_node->value = hashData(pEntry->key);
+
+    if (existing == NULL || existing->ThePacket == NULL) {
+        printf("Inserting New Node\n");
+        ht->table[index] = pEntry;
+    }
+    // MAYBE PROBLEM HERE
+    else if (sizeof(existing->key) == sizeof(new_node->key)) {
+        
+        // MAYBE PROBLEM HERE
+        // if (memcmp((void*) existing->key, (void *) getNetPayload(pEntry), sizeof(existing->key) == 0)) {
+        if (memcmp((void*) existing->key, (void *) new_node->key, sizeof(existing->key) == 0)) {
+            printf("Payloads Match\n");
+            // this means the netPayloads are the same
+            // this is a hit
+            existing->HitCount++;
+            existing->RedundantBytes += sizeof(getNetPayload(pEntry));
+
+            // discard the one being inserted
+            discardPacket(new_node->ThePacket);
+        }
+        else {
+            // if existing hit count is greater than < 1 evict the exising packetentry
+            if (existing->HitCount < 1) {
+                printf("Evicting old1\n");
+                // discard existing
+                discardPacket(existing->ThePacket);
+            
+                ht->table[index] = new_node;
+            }
+                else {
+                    // discard the new one
+                    printf("Evicting new1\n");
+                    discardPacket(new_node->ThePacket);
+        }
+        }
+    }
+    // MAYBE PROBLEM HERE
+    else {
+        // if existing hit count is greater than < 1 evict the exising packetentry
+        if (existing->HitCount < 1) {
+            printf("Evicting old2\n");
+            // discard existing
+            discardPacket(existing->ThePacket);
+            
+            ht->table[index] = new_node;
+        }
+        else {
+            // discard the new one
+            printf("Evicting new2\n");
+            discardPacket(new_node->ThePacket);
+        }
+    }
+}
 
 void initializeProcessingStats ()
 {
@@ -43,46 +140,77 @@ char initializeProcessing (int TableSize)
     initializeProcessingStats();
 
     /* Allocate our big table */
-    BigTable = (struct PacketEntry *) malloc(sizeof(struct PacketEntry) * TableSize);
+    // BigTable = (struct PacketEntry *) malloc(sizeof(struct PacketEntry) * TableSize);
 
-    if(BigTable == NULL)
-    {
-        printf("* Error: Unable to create the new table\n");
-        return 0;
+    // if(BigTable == NULL)
+    // {
+    //     printf("* Error: Unable to create the new table\n");
+    //     return 0;
+    // }
+
+    for (int j = 0; j < TABLE_SIZE; j++) {
+        TheHash.table[j] = (struct PacketEntry *) malloc(sizeof(struct PacketEntry));
+        TheHash.table[j]->ThePacket = NULL;
+        TheHash.table[j]->HitCount  = 0;
+        TheHash.table[j]->RedundantBytes = 0;
     }
 
-    for(int j=0; j<TableSize; j++)
-    {
-        BigTable[j].ThePacket = NULL;
-        BigTable[j].HitCount  = 0;
-        BigTable[j].RedundantBytes = 0;
-    }
+    // for(int j=0; j<TableSize; j++)
+    // {
+    //     BigTable[j].ThePacket = NULL;
+    //     BigTable[j].HitCount  = 0;
+    //     BigTable[j].RedundantBytes = 0;
+    // }
 
-    BigTableSize = TableSize;
-    BigTableNextToReplace = 0;
+    // BigTableSize = TableSize;
+    // BigTableNextToReplace = 0;
     return 1;
 }
 
 void resetAndSaveEntry (int nEntry)
 {
-    if(nEntry < 0 || nEntry >= BigTableSize)
+    // if(nEntry < 0 || nEntry >= BigTableSize)
+    // {
+    //     printf("* Warning: Tried to reset an entry in the table - entry out of bounds (%d)\n", nEntry);
+    //     return;
+    // }
+
+    // if(BigTable[nEntry].ThePacket == NULL)
+    // {
+    //     return;
+    // }
+
+    printf("%d\n", nEntry);
+
+    if(nEntry < 0 || nEntry >= TABLE_SIZE)
     {
         printf("* Warning: Tried to reset an entry in the table - entry out of bounds (%d)\n", nEntry);
         return;
     }
 
-    if(BigTable[nEntry].ThePacket == NULL)
-    {
-        return;
-    }
+    // if (TheHash.table[nEntry] == NULL) {
+    //     return;
+    // }
+    printf("hello\n");
 
-    gPacketHitCount += BigTable[nEntry].HitCount;
-    gPacketHitBytes += BigTable[nEntry].RedundantBytes;
-    discardPacket(BigTable[nEntry].ThePacket);
+    gPacketHitCount += TheHash.table[nEntry]->HitCount;
+    gPacketHitBytes += TheHash.table[nEntry]->RedundantBytes;
 
-    BigTable[nEntry].HitCount = 0;
-    BigTable[nEntry].RedundantBytes = 0;
-    BigTable[nEntry].ThePacket = NULL;
+    printf("hello\n");
+
+    discardPacket(TheHash.table[nEntry]->ThePacket);
+
+    // TheHash.table[nEntry]->HitCount = 0;
+    // TheHash.table[nEntry]->RedundantBytes = 0;
+    // TheHash.table[nEntry]->ThePacket = NULL;
+
+    // gPacketHitCount += BigTable[nEntry].HitCount;
+    // gPacketHitBytes += BigTable[nEntry].RedundantBytes;
+    // discardPacket(BigTable[nEntry].ThePacket);
+
+    // BigTable[nEntry].HitCount = 0;
+    // BigTable[nEntry].RedundantBytes = 0;
+    // BigTable[nEntry].ThePacket = NULL;
 }
 
 void processPacket (struct Packet * pPacket)
@@ -186,84 +314,98 @@ void processPacket (struct Packet * pPacket)
 
     /* Step 2: Do any packet payloads match up? */
 
-    int j;
+    struct PacketEntry pEntry;
+    pEntry.ThePacket = pPacket;
+    pEntry.HitCount = 0;
+    pEntry.RedundantBytes = 0;
+    pEntry.key = NetPayload;
+    pEntry.value = 0;
 
-    for(j=0; j<BigTableSize; j++)
-    {
-        if(BigTable[j].ThePacket != NULL)
-        {
-            int k;
+    insert(&TheHash, &pEntry);
 
-            /* Are the sizes the same? */
-            if(BigTable[j].ThePacket->PayloadSize != pPacket->PayloadSize)
-            {
-                continue;
-            }
+    // int j;
 
-            /* OK - same size - do the bytes match up? */
-            for(k=0; k<BigTable[j].ThePacket->PayloadSize; k++)
-            {
-                if(BigTable[j].ThePacket->Data[k+PayloadOffset] != pPacket->Data[k+PayloadOffset])
-                {
-                    /* Nope - they are not the same */
-                    break;
-                }
-            }
+    // for(j=0; j<BigTableSize; j++)
+    // {
+    //     if(BigTable[j].ThePacket != NULL)
+    //     {
+    //         int k;
 
-            /* Did we break out with a mismatch? */
-            if(k < BigTable[j].ThePacket->PayloadSize)
-            {
-                continue;
-            }
-            else 
-            {
-                /* Whoot, whoot - the payloads match up */
-                BigTable[j].HitCount++;
-                BigTable[j].RedundantBytes += pPacket->PayloadSize;
+    //         /* Are the sizes the same? */
+    //         if(BigTable[j].ThePacket->PayloadSize != pPacket->PayloadSize)
+    //         {
+    //             continue;
+    //         }
 
-                /* The packets match so get rid of the matching one */
-                discardPacket(pPacket);
-                return;
-            }
-        }
-        else 
-        {
-            /* We made it to an empty entry without a match */
+    //         /* OK - same size - do the bytes match up? */
+    //         for(k=0; k<BigTable[j].ThePacket->PayloadSize; k++)
+    //         {
+    //             if(BigTable[j].ThePacket->Data[k+PayloadOffset] != pPacket->Data[k+PayloadOffset])
+    //             {
+    //                 /* Nope - they are not the same */
+    //                 break;
+    //             }
+    //         }
+
+    //         /* Did we break out with a mismatch? */
+    //         if(k < BigTable[j].ThePacket->PayloadSize)
+    //         {
+    //             continue;
+    //         }
+    //         else 
+    //         {
+    //             /* Whoot, whoot - the payloads match up */
+    //             BigTable[j].HitCount++;
+    //             BigTable[j].RedundantBytes += pPacket->PayloadSize;
+
+    //             /* The packets match so get rid of the matching one */
+    //             discardPacket(pPacket);
+    //             return;
+    //         }
+    //     }
+    //     else 
+    //     {
+    //         /* We made it to an empty entry without a match */
             
-            BigTable[j].ThePacket = pPacket;
-            BigTable[j].HitCount = 0;
-            BigTable[j].RedundantBytes = 0;
-            break;
-        }
-    }
+    //         BigTable[j].ThePacket = pPacket;
+    //         BigTable[j].HitCount = 0;
+    //         BigTable[j].RedundantBytes = 0;
+    //         break;
+    //     }
+    // }
 
-    /* Did we search the entire table and find no matches? */
-    if(j == BigTableSize)
-    {
-        /* Kick out the "oldest" entry by saving its entry to the global counters and 
-           free up that packet allocation 
-         */
-        resetAndSaveEntry(BigTableNextToReplace);
+    // /* Did we search the entire table and find no matches? */
+    // if(j == BigTableSize)
+    // {
+    //     /* Kick out the "oldest" entry by saving its entry to the global counters and 
+    //        free up that packet allocation 
+    //      */
+    //     resetAndSaveEntry(BigTableNextToReplace);
 
-        /* Take ownership of the packet */
-        BigTable[BigTableNextToReplace].ThePacket = pPacket;
+    //     /* Take ownership of the packet */
+    //     BigTable[BigTableNextToReplace].ThePacket = pPacket;
 
-        /* Rotate to the next one to replace */
-        BigTableNextToReplace = (BigTableNextToReplace+1) % BigTableSize;
-    }
+    //     /* Rotate to the next one to replace */
+    //     BigTableNextToReplace = (BigTableNextToReplace+1) % BigTableSize;
+    // }
 
     /* All done */
 }
 
 void tallyProcessing ()
 {
-    for(int j=0; j<BigTableSize; j++)
+    // for(int j=0; j<BigTableSize; j++)
+    // {
+    //     resetAndSaveEntry(j);
+    // }
+    for(int j=0; j<TABLE_SIZE; j++)
     {
         resetAndSaveEntry(j);
+        printf("now here %d %d\n", j, TABLE_SIZE);
     }
+
+    for (int j = 0; j < TABLE_SIZE; j++) {
+        free(TheHash.table[j]);
+    }
+
 }
-
-
-
-
-
