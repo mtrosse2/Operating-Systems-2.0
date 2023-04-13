@@ -2,9 +2,146 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
-
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
 
 #include "pcap-process.h"
+
+#define MAX_KEY_LEN 100
+#define MAX_VALUE_LEN 100
+
+
+
+//#######################################################################################################################################################
+struct {
+	int RedundantBytes;
+	int HitCount;
+} packet_info;
+
+
+struct DictionaryNode {
+    struct Packet* key; // key of type Packet*
+    struct packet_info* value; // value of type packet_info*
+    struct DictionaryNode* next; // pointer to the next node
+};
+
+// Dictionary
+struct Dictionary {
+    struct DictionaryNode** buckets; // array of buckets
+    int num_buckets; // number of buckets
+};
+
+// Function to create a new dictionary
+struct Dictionary* create_dictionary(int num_buckets) {
+    struct Dictionary* dictionary = (struct Dictionary*)malloc(sizeof(struct Dictionary));
+    dictionary->buckets = (struct DictionaryNode**)malloc(num_buckets * sizeof(struct DictionaryNode*));
+    dictionary->num_buckets = num_buckets;
+    for (int i = 0; i < num_buckets; i++) {
+        dictionary->buckets[i] = NULL;
+    }
+    return dictionary;
+}
+
+// Function to compute the hash value for a given key
+int hash_function(struct Packet* key, int num_buckets) {
+    // Use your own implementation of a hash function for Packet* key
+    // Example:
+    // return (int)(((uintptr_t)key) % num_buckets);
+}
+
+// Function to insert a key-value pair into the dictionary
+void insert(struct Dictionary* dictionary, struct Packet* key, struct packet_info* value) {
+    int bucket_idx = hash_function(key, dictionary->num_buckets);
+    struct DictionaryNode* new_node = (struct DictionaryNode*)malloc(sizeof(struct DictionaryNode));
+    new_node->key = key;
+    new_node->value = value;
+    new_node->next = dictionary->buckets[bucket_idx];
+    dictionary->buckets[bucket_idx] = new_node;
+}
+
+// Function to lookup a value in the dictionary by key
+struct packet_info* lookup(struct Dictionary* dictionary, struct Packet* key) {
+    int bucket_idx = hash_function(key, dictionary->num_buckets);
+    struct DictionaryNode* current = dictionary->buckets[bucket_idx];
+    while (current != NULL) {
+        if (current->key == key) {
+            return current->value;
+        }
+        current = current->next;
+    }
+    return NULL;
+}
+
+// Function to remove a key-value pair from the dictionary by key
+void remove_entry(struct Dictionary* dictionary, struct Packet* key) {
+    int bucket_idx = hash_function(key, dictionary->num_buckets);
+    struct DictionaryNode* prev = NULL;
+    struct DictionaryNode* current = dictionary->buckets[bucket_idx];
+    while (current != NULL) {
+        if (current->key == key) {
+            if (prev == NULL) {
+                dictionary->buckets[bucket_idx] = current->next;
+            } else {
+                prev->next = current->next;
+            }
+            free(current);
+            return;
+        }
+        prev = current;
+        current = current->next;
+    }
+}
+
+// Function to free memory used by the dictionary
+void free_dictionary(struct Dictionary* dictionary) {
+    for (int i = 0; i < dictionary->num_buckets; i++) {
+        struct DictionaryNode* current = dictionary->buckets[i];
+        while (current != NULL) {
+            struct DictionaryNode* next = current->next;
+            free(current);
+            current = next;
+				}
+		}
+}
+
+// Function to pick a random key from the dictionary
+struct Packet* pick_random_key(struct Dictionary* dictionary) {
+    // Seed the random number generator
+    srand(time(0));
+
+    // Count the number of keys in the dictionary
+    int count = 0;
+    struct DictionaryNode* current = dictionary->head;
+    while (current != NULL) {
+        count++;
+        current = current->next;
+    }
+
+    // Pick a random index
+    int random_index = rand() % count;
+
+    // Traverse to the node at the random index
+    current = dictionary->head;
+    for (int i = 0; i < random_index; i++) {
+        current = current->next;
+    }
+
+    // Return the key at the random index
+    return current->key;
+}
+
+int dictionary_size(struct Dictionary* dictionary) {
+    int count = 0;
+    struct DictionaryNode* current = dictionary->head;
+    while (current != NULL) {
+        count++;
+        current = current->next;
+    }
+    return count;
+}
+
+//#######################################################################################################################################################
 
 /* How many packets have we seen? */
 uint32_t        gPacketSeenCount;
@@ -19,10 +156,10 @@ uint32_t        gPacketHitCount;
 uint64_t        gPacketHitBytes;
 
 /* Our big table for recalling packets */
-struct PacketEntry *    BigTable; 
-int    BigTableSize;
-int    BigTableNextToReplace;
-
+// struct Packet *    BigTable; 
+int    BigMapSize;
+int    BigMapNextToReplace;
+struct Dictionary * BigMap = createDictionary();
 
 
 void initializeProcessingStats ()
@@ -38,35 +175,41 @@ char initializeProcessing (int TableSize)
     initializeProcessingStats();
 
     /* Allocate our big table */
-    BigTable = (struct PacketEntry *) malloc(sizeof(struct PacketEntry) * TableSize);
+    // BigTable = (struct Packet *) malloc(sizeof(struct Packet) * TableSize);
+		BigMap = createDictionary();
 
-    if(BigTable == NULL)
+
+    if(BigMap == NULL)
     {
-        printf("* Error: Unable to create the new table\n");
+        printf("* Error: Unable to create the new map\n");
         return 0;
     }
 
+		/*
     for(int j=0; j<TableSize; j++)
     {
+				insert(BigMap, NULL)
         BigTable[j].ThePacket = NULL;
         BigTable[j].HitCount  = 0;
         BigTable[j].RedundantBytes = 0;
     }
 
-    BigTableSize = TableSize;
-    BigTableNextToReplace = 0;
+		*/
+    BigMapSize = TableSize;
+    BigMapNextToReplace = 0;
+
     return 1;
 }
 
 void resetAndSaveEntry (int nEntry)
 {
-    if(nEntry < 0 || nEntry >= BigTableSize)
+    if(nEntry < 0 || nEntry >= BigMapSize)
     {
         printf("* Warning: Tried to reset an entry in the table - entry out of bounds (%d)\n", nEntry);
         return;
     }
 
-    if(BigTable[nEntry].ThePacket == NULL)
+    if(lookup(BigMap, NULL) == NULL) //?????????????????????????????????????????????????????????????????????????????????????????????????????????
     {
         return;
     }
@@ -84,7 +227,10 @@ void processPacket (struct Packet * pPacket)
 {
     uint16_t        PayloadOffset;
 
-    PayloadOffset = 0;
+		struct *packet_info temp;
+		struct *packet_info idk;
+    
+		PayloadOffset = 0;
 
     /* Do a bit of error checking */
     if(pPacket == NULL)
@@ -180,72 +326,39 @@ void processPacket (struct Packet * pPacket)
     pPacket->PayloadSize = NetPayload;
 
     /* Step 2: Do any packet payloads match up? */
-
-    int j;
-
-    for(j=0; j<BigTableSize; j++)
-    {
-        if(BigTable[j].ThePacket != NULL)
-        {
-            int k;
-
-            /* Are the sizes the same? */
-            if(BigTable[j].ThePacket->PayloadSize != pPacket->PayloadSize)
-            {
-                continue;
-            }
-
-            /* OK - same size - do the bytes match up? */
-            for(k=0; k<BigTable[j].ThePacket->PayloadSize; k++)
-            {
-                if(BigTable[j].ThePacket->Data[k+PayloadOffset] != pPacket->Data[k+PayloadOffset])
-                {
-                    /* Nope - they are not the same */
-                    break;
-                }
-            }
-
-            /* Did we break out with a mismatch? */
-            if(k < BigTable[j].ThePacket->PayloadSize)
-            {
-                continue;
-            }
-            else 
-            {
-                /* Whoot, whoot - the payloads match up */
-                BigTable[j].HitCount++;
-                BigTable[j].RedundantBytes += pPacket->PayloadSize;
-
-                /* The packets match so get rid of the matching one */
-                discardPacket(pPacket);
-                return;
-            }
-        }
-        else 
-        {
-            /* We made it to an empty entry without a match */
-            
-            BigTable[j].ThePacket = pPacket;
-            BigTable[j].HitCount = 0;
-            BigTable[j].RedundantBytes = 0;
-            break;
-        }
-    }
+		if(lookup(BigMap, pPacket) != NULL){
+			idk = lookup(BigMap, pPacket);
+			idk->HitCount++;
+			idk->RedundantBytes += pPacket->PayloadSize;
+			discardPacket(pPacket);
+			return;
+		}
+		else
+		{
+			temp = malloc(sizeof(struct packet_info*));
+			temp->HitCount = 0;
+			temp->RedundantBytes = 0;
+			insert(BigMap, pPacket, temp);
+		}
 
     /* Did we search the entire table and find no matches? */
-    if(j == BigTableSize)
+		int count = dictionary_size(BigMap);
+    if(count >= BigMapSize)
     {
+				struct Packet* idk2 = pick_random_key(BigMap);
+				remove_entry(BigMap, idk2);
         /* Kick out the "oldest" entry by saving its entry to the global counters and 
            free up that packet allocation 
-         */
+         
         resetAndSaveEntry(BigTableNextToReplace);
 
-        /* Take ownership of the packet */
+         Take ownership of the packet 
         BigTable[BigTableNextToReplace].ThePacket = pPacket;
 
-        /* Rotate to the next one to replace */
+        Rotate to the next one to replace
         BigTableNextToReplace = (BigTableNextToReplace+1) % BigTableSize;
-    }
+    		*/
+		}
 
     /* All done */
 }
