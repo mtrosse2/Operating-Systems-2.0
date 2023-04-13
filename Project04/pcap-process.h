@@ -34,6 +34,9 @@ struct PacketEntry
 
     /* How much data would we have saved? */
     uint32_t        RedundantBytes;
+
+    int key;
+    int value;
 };
 
 /* Our big table for recalling packets */
