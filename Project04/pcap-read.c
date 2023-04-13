@@ -146,7 +146,7 @@ struct Packet * readNextPacket (FILE * pTheFile, struct FilePcapInfo * pFileInfo
 	/* Double check that the packet can fit */
 	if(pPacket->SizeDataMax < pPacket->LengthIncluded)
 	{
-		printf("* Warning: Unable to include packet of size %d due it exceeding %d bytes\n", pPacket->LengthIncluded, pPacket->SizeDataMax);
+		// printf("* Warning: Unable to include packet of size %d due it exceeding %d bytes\n", pPacket->LengthIncluded, pPacket->SizeDataMax);
 		discardPacket(pPacket);
 
 		/* Skip this packet payload */
@@ -165,7 +165,7 @@ struct Packet * readNextPacket (FILE * pTheFile, struct FilePcapInfo * pFileInfo
 
 	if(SHOW_DEBUG)
 	{
-		printf("Packet %d Info: t=%ld.%08d of %d bytes long (%d on the wire) \n", pFileInfo->Packets-1, (long int) pPacket->TimeCapture.tv_sec, (int) pPacket->TimeCapture.tv_usec, pPacket->LengthIncluded, pPacket->LengthOriginal);
+		// printf("Packet %d Info: t=%ld.%08d of %d bytes long (%d on the wire) \n", pFileInfo->Packets-1, (long int) pPacket->TimeCapture.tv_sec, (int) pPacket->TimeCapture.tv_usec, pPacket->LengthIncluded, pPacket->LengthOriginal);
 	}
 
 	return pPacket;
