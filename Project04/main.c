@@ -15,7 +15,8 @@ char * strdup(const char *s);
 
 #define MAX_PCAP_FILES 10
 #define MAX_FILE_LEN 20
-#define OUR_MAX_PACKETS 5
+#define OUR_MAX_PACKETS 0
+#define STACK_MAX_SIZE 7
 
 pthread_mutex_t StackLock;
 
@@ -24,14 +25,14 @@ pthread_cond_t consumer_wait;
 pthread_cond_t producer_wait;
 int num_threads = 1;
 int window_size = 1;
-int num_consumers = 1;
+int num_consumers = 5;
 int num_producers = 1;
 int stackSize = 0;
 int isdone = 0;
-int nThreadsConsumers = 2;
+int nThreadsConsumers = 5;
 int nThreadsProducers = 1;
 
-#define STACK_MAX_SIZE 7
+int numPcapFiles = 0;
 
 struct ThreadDataProduce
 {
@@ -54,8 +55,6 @@ char* extension(char* filename) {
 }
 
 
-// My work start
-
 void * thread_producer(void *pThreadData){
 	struct ThreadDataProduce * pData;
 	pData = (struct ThreadDataProduce *) pThreadData;
@@ -74,25 +73,21 @@ void * thread_producer(void *pThreadData){
 
 	/* Open the file and its respective front matter */
 	pTheFile = fopen(pFileInfo->FileName, "r");
+    printf("opening file\n");
 
 	/* Read the front matter */
 	if(!parsePcapFileStart(pTheFile, pFileInfo))
 	{
 		printf("* Error: Failed to parse front matter on pcap file %s\n", pFileInfo->FileName);
-		// pthread_mutex_unlock(&StackLock);
 		return NULL;
 	}
 	while(!feof(pTheFile)){
-		// printf("Readin Bitch\n");
 		pPacket = readNextPacket(pTheFile, pFileInfo);
 		pthread_mutex_lock(&StackLock);
 
-		while(stackSize >= STACK_MAX_SIZE && isdone == 0){
+		while(stackSize >= STACK_MAX_SIZE){
 			pthread_cond_wait(&producer_wait, &StackLock);
 		}
-
-		if(isdone == 1)
-			break;
 
 		stack[stackSize] = pPacket;
 		stackSize++;
@@ -100,8 +95,7 @@ void * thread_producer(void *pThreadData){
 		pthread_mutex_unlock(&StackLock);
 	}
 	fclose(pTheFile);
-	isdone = 1;
-	printf("");
+	isdone++;
 	pthread_cond_broadcast(&consumer_wait);
 	pthread_mutex_unlock(&StackLock);
 	return NULL;
@@ -110,13 +104,12 @@ void * thread_producer(void *pThreadData){
 // not too sure what to return
 void  *thread_consumer(void *arg){
 	while(1){
-		// printf("Consumin bitch\n");
 		pthread_mutex_lock(&StackLock);
-		while(stackSize <= 0 && isdone == 0){	// while stack is empty
-			//printf("Wait\n");
+		while(stackSize <= 0){	// while stack is empty
+			if (isdone == numPcapFiles) break;
 			pthread_cond_wait(&consumer_wait, &StackLock);
 		}
-		if(isdone == 1 && stackSize <= 0){
+		if(isdone == numPcapFiles && stackSize <= 0){
 			pthread_mutex_unlock(&StackLock);
 			break;
 		}
@@ -128,27 +121,13 @@ void  *thread_consumer(void *arg){
 			processPacket(poc);
 		}
 
-		/* Allow for an early bail out if specified */
-		/*
-		if(pFileInfo->MaxPackets != 0)
-		{
-			if(pFileInfo->Packets >= pFileInfo->MaxPackets)
-			{
-				break;
-			}
-		}
-		*/
 		pthread_cond_broadcast(&producer_wait);
 		pthread_mutex_unlock(&StackLock);
-		// need to return something
 	}
 	pthread_cond_broadcast(&consumer_wait);
-	printf("Consumer done\n");
+	// printf("Consumer done\n");
 	return NULL;
 }
-
-
-// My work end
 
 int main (int argc, char *argv[])
 {	 
@@ -177,7 +156,6 @@ int main (int argc, char *argv[])
 	pthread_cond_init(&producer_wait, NULL);
 
    struct FilePcapInfo * theInfo = (struct FilePcapInfo *) malloc(sizeof(struct FilePcapInfo) * MAX_PCAP_FILES);
-   int numPcapFiles = 0;
    char buffer[MAX_FILE_LEN];
 
 	// PARSE COMMAND LINE ARGUMENTS
@@ -203,21 +181,16 @@ int main (int argc, char *argv[])
                 exit(-1);
             }
             while (fgets(buffer, MAX_FILE_LEN, fp) != NULL && numPcapFiles < MAX_PCAP_FILES) {
-                buffer[strcspn(buffer, "\n")] = '\0';
-                printf("%s\n", buffer);
-                ext = extension(buffer);
-                if (strcmp(ext, "pcap") == 0) {
-                    theInfo[numPcapFiles].FileName = buffer;
-                    theInfo[numPcapFiles].EndianFlip = 0;
-                    theInfo[numPcapFiles].BytesRead = 0;
-                    theInfo[numPcapFiles].Packets = 0;
-                    theInfo[numPcapFiles].MaxPackets = OUR_MAX_PACKETS;
-                    numPcapFiles++;
+                if (strcmp(buffer, "\n") == 0) {
+                    memset(buffer, 0, sizeof(buffer));
+                    continue;
                 }
-                else {
-                    fprintf(stderr, "Error: Invalid pcap file specified in file '%s'\n", argv[i]);
-                    exit(-1);
-                }
+                theInfo[numPcapFiles].FileName = buffer;
+                theInfo[numPcapFiles].EndianFlip = 0;
+                theInfo[numPcapFiles].BytesRead = 0;
+                theInfo[numPcapFiles].Packets = 0;
+                theInfo[numPcapFiles].MaxPackets = OUR_MAX_PACKETS;
+                numPcapFiles++;
             }
         }
         // handle threads argument
@@ -271,70 +244,53 @@ int main (int argc, char *argv[])
         }
         i++;
 	}
-		
+    // for (i = 0; i < numPcapFiles; i++) {
+    //     printf("%s\n", theInfo[i].FileName);
+    // }
 		
     printf("MAIN: Initializing the table for redundancy extraction\n");
     initializeProcessing(DEFAULT_TABLE_SIZE);
     printf("MAIN: Initializing the table for redundancy extraction ... done\n");
 
-    /* Note that the code as provided below does only the following 
-     *
-     * - Reads in a single file twice
-     * - Reads in the file one packet at a time
-     * - Process the packets for redundancy extraction one packet at a time
-     * - Displays the end results
-     */
-
-
-		
-		pthread_t * pThreadConsumers;
-		pthread_t * pThreadProducers;
-		pThreadConsumers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsConsumers ); // Need to change this to number of consumers later
-		pThreadProducers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsProducers);
-		
-		struct ThreadDataProduce * pThreadData[nThreadsProducers]; // Change to number of producers
-		
-		pthread_t PID = 0;
-    for (i = 0; i < numPcapFiles; i++) {
-				int k = 0;
-				for(k=0; k < nThreadsProducers; k++){
-					pThreadData[k] = malloc(sizeof(struct ThreadDataProduce));
-					pThreadData[k]->ThreadID = PID;
-					pThreadData[k]->PcapInfo = &theInfo[i];
-					pthread_create(pThreadProducers+k, NULL, thread_producer, (void *) pThreadData[k]);
-				 }
-				for(k=0; k < nThreadsConsumers; k++){
-					pthread_create(pThreadConsumers+k, NULL, &thread_consumer, NULL);
-				}
-				for(k = 0; k < nThreadsConsumers; k++){
-					pthread_join(pThreadConsumers[k], NULL);
-				}
-				/*
-        printf("MAIN: Attempting to read in the file named %s\n", theInfo[i].FileName);
-        readPcapFile(&theInfo[i]);
-
-        printf("MAIN: Attempting to read in the file named %s again\n", theInfo[i].FileName);
-        readPcapFile(&theInfo[i]);
-				*/
-
-        printf("Summarizing the processed entries\n");
-        tallyProcessing();
-
-        /* Output the statistics */
-
-        printf("Parsing of file %s complete\n", argv[1]);
-
-        printf("  Total Packets Parsed:    %d\n", gPacketSeenCount);
-        printf("  Total Bytes   Parsed:    %lu\n", (unsigned long) gPacketSeenBytes);
-        printf("  Total Packets Duplicate: %d\n", gPacketHitCount);
-        printf("  Total Bytes   Duplicate: %lu\n", (unsigned long) gPacketHitBytes);
-
-        float fPct;
-
-        fPct = (float) gPacketHitBytes / (float) gPacketSeenBytes * 100.0;
-
-        printf("  Total Duplicate Percent: %6.2f%%\n", fPct);
+    pthread_t * pThreadConsumers;
+    pthread_t * pThreadProducers;
+    pThreadConsumers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsConsumers ); // Need to change this to number of consumers later
+    pThreadProducers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsProducers);
+    
+    struct ThreadDataProduce * pThreadData[nThreadsProducers]; // Change to number of producers
+    
+    for(int k=0; k < nThreadsConsumers; k++){
+        pthread_create(pThreadConsumers+k, NULL, &thread_consumer, NULL); 
     }
+
+    for (i = 0; i < numPcapFiles; i++) {
+        pThreadData[i] = malloc(sizeof(struct ThreadDataProduce));
+        pThreadData[i]->ThreadID = i;
+        pThreadData[i]->PcapInfo = &theInfo[i];
+        pthread_create(pThreadProducers+i, NULL, thread_producer, (void *) pThreadData[i]);
+    }
+
+    for(int j = 0; j < nThreadsConsumers; j++) {
+        pthread_join(pThreadConsumers[j], NULL);
+    }
+
+    printf("Summarizing the processed entries\n");
+    tallyProcessing();
+
+    /* Output the statistics */
+
+    printf("Parsing of file %s complete\n", argv[1]);
+
+    printf("  Total Packets Parsed:    %d\n", gPacketSeenCount);
+    printf("  Total Bytes   Parsed:    %lu\n", (unsigned long) gPacketSeenBytes);
+    printf("  Total Packets Duplicate: %d\n", gPacketHitCount);
+    printf("  Total Bytes   Duplicate: %lu\n", (unsigned long) gPacketHitBytes);
+
+    float fPct;
+
+    fPct = (float) gPacketHitBytes / (float) gPacketSeenBytes * 100.0;
+
+    printf("  Total Duplicate Percent: %6.2f%%\n", fPct);
 
     return 0;
 }
