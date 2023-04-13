@@ -13,7 +13,7 @@ char * strdup(const char *s);
 #include "pcap-read.h"
 #include "pcap-process.h"
 
-#define MAX_PCAP_FILES 10
+#define MAX_PCAP_FILES 4
 #define MAX_FILE_LEN 20
 #define OUR_MAX_PACKETS 0
 #define STACK_MAX_SIZE 7
@@ -25,8 +25,6 @@ pthread_cond_t consumer_wait;
 pthread_cond_t producer_wait;
 int num_threads = 1;
 int window_size = 1;
-int num_consumers = 5;
-int num_producers = 1;
 int stackSize = 0;
 int isdone = 0;
 int nThreadsConsumers = 5;
@@ -255,7 +253,7 @@ int main (int argc, char *argv[])
     pthread_t * pThreadConsumers;
     pthread_t * pThreadProducers;
     pThreadConsumers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsConsumers ); // Need to change this to number of consumers later
-    pThreadProducers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsProducers);
+    pThreadProducers = (pthread_t *) malloc(sizeof(pthread_t *) * numPcapFiles);
     
     struct ThreadDataProduce * pThreadData[nThreadsProducers]; // Change to number of producers
     
