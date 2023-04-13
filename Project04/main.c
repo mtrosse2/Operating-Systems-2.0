@@ -28,8 +28,8 @@ int num_consumers = 1;
 int num_producers = 1;
 int stackSize = 0;
 int isdone = 0;
-int nThreadsConsumers = 1;
-int nThreadsProducers = 2;
+int nThreadsConsumers = 2;
+int nThreadsProducers = 1;
 
 #define STACK_MAX_SIZE 7
 
@@ -294,7 +294,6 @@ int main (int argc, char *argv[])
 		
 		struct ThreadDataProduce * pThreadData[nThreadsProducers]; // Change to number of producers
 		
-		nThreadsConsumers += 1;
 		pthread_t PID = 0;
     for (i = 0; i < numPcapFiles; i++) {
 				int k = 0;

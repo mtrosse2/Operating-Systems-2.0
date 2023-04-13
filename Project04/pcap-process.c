@@ -24,6 +24,8 @@ uint64_t        gPacketHitBytes;
 struct PacketEntry * TheHash;
 pthread_mutex_t HashLock;
 
+void print_all_hitcounts();
+
 void initializeProcessing() {
     // initialize stats
     gPacketSeenCount = 0;
@@ -51,13 +53,14 @@ void initializeProcessing() {
 }
 
 void replaceSaveEntry(int index, struct Packet * pPacket) {
-    struct PacketEntry existing = TheHash[index];
+    // struct PacketEntry existing = TheHash[index];
 
     // update globals with entry being replaced
-    gPacketHitCount += existing.HitCount;
-    gPacketHitBytes += existing.RedundantBytes;
+		// printf("Updating HitCount by %d\n", TheHash[index].HitCount);
+    gPacketHitCount += TheHash[index].HitCount;
+    gPacketHitBytes += TheHash[index].RedundantBytes;
 
-    struct Packet * dPacket = existing.ThePacket;
+    struct Packet * dPacket = TheHash[index].ThePacket;
 
     // insert new entry in hash
     TheHash[index].ThePacket = pPacket;
@@ -73,8 +76,7 @@ void tallyProcessing() {
 
     for (int i = 0; i < TABLE_SIZE; i++) {
         struct PacketEntry * pEntry = &TheHash[i];
-        printf("in here\n");
-
+        
         if (pEntry->ThePacket != NULL) {
             // update globals with entry being replaced
             gPacketHitCount += pEntry->HitCount;
@@ -82,9 +84,11 @@ void tallyProcessing() {
 
             // remove packet
             discardPacket(pEntry->ThePacket);
+
+						if(pEntry == NULL)
+        			free(pEntry);
         }
 
-        free(pEntry);
     }
 
     return;
@@ -107,37 +111,60 @@ u_int16_t hashData(int netPayload) {
 }
 
 uint16_t getNetPayload(struct Packet * pPacket){
-    return pPacket->LengthIncluded - pPacket->PayloadOffset;
+    return pPacket->Data[pPacket->PayloadOffset];
+		//return pPacket->LengthIncluded - pPacket->PayloadOffset;
+}
+
+uint16_t getNetPayloadSize(struct Packet * pPacket){
+		return pPacket->LengthIncluded - pPacket->PayloadOffset;
 }
 
 void insert(struct Packet * pPacket) {
     u_int16_t index = hashData(getNetPayload(pPacket));
 
-    struct PacketEntry existing = TheHash[index];
+    // struct PacketEntry existing = TheHash[index];
 
-    if (existing.ThePacket == NULL) {
-        printf("Inserting new packet entry at index %d\n", index);
+    if (TheHash[index].ThePacket == NULL) {
+        //printf("Inserting new packet entry at index %d\n", index);
         TheHash[index].ThePacket = pPacket;
     }
     else {
-        if (existing.ThePacket->PayloadSize == pPacket->PayloadSize && getNetPayload(existing.ThePacket) == getNetPayload(pPacket)) {
-            printf("Net payloads match\n");
-            existing.HitCount++;
-            existing.RedundantBytes += pPacket->PayloadSize;
+				//printf("Conflict at index: %d\n", index);
+        //if (TheHash[index].ThePacket->PayloadSize == pPacket->PayloadSize && memcmp(TheHash[index].ThePacket) ) { //&& getNetPayload(TheHash[index].ThePacket) == getNetPayload(pPacket)) {
+					if(getNetPayloadSize(TheHash[index].ThePacket) == getNetPayloadSize(pPacket) && getNetPayload(TheHash[index].ThePacket) == getNetPayload(pPacket) ) {
+						//printf("Hit\n");
+						//printf("Should update hitcount %d\n", existing.HitCount);
+            TheHash[index].HitCount++;
+						//printf("after: %d\n", TheHash[index].HitCount);
+            TheHash[index].RedundantBytes += pPacket->PayloadSize;
 
             discardPacket(pPacket);
         }
         else {
-            if (existing.HitCount < 1) {
-                printf("Replacing packet entry at index %d\n", index);
+						//printf("Miss\n");
+						//printf("Should not update hitcount\n");
+            if (TheHash[index].HitCount < 1) {
+                //printf("Replacing packet entry at index %d\n", index);
                 replaceSaveEntry(index, pPacket);
             }
             else {
-                printf("Discarding new packet\n");
+                //printf("Discarding new packet\n");
                 discardPacket(pPacket);
             }
         }
     }
+		//print_all_hitcounts();
+}
+
+void print_all_hitcounts(){
+	int i;
+	printf("--------------------------------------------------------\n");
+	for(i = 0; i < TABLE_SIZE; i++){
+		if (TheHash[i].ThePacket != NULL){
+			printf("%d, ", TheHash[i].HitCount);
+		}
+	}
+	printf("\n--------------------------------------------------------\n");
 }
 
 void processPacket(struct Packet * pPacket) {
