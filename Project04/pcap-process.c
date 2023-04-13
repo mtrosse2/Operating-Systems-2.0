@@ -119,6 +119,7 @@ uint16_t getNetPayloadSize(struct Packet * pPacket){
 
 void insert(struct Packet * pPacket) {
     u_int16_t index = hashData(getNetPayload(pPacket));
+    pthread_mutex_lock(&HashLock);
 
     // struct PacketEntry existing = TheHash[index];
 
@@ -142,16 +143,17 @@ void insert(struct Packet * pPacket) {
 						//printf("Miss\n");
 						//printf("Should not update hitcount\n");
             if (TheHash[index].HitCount < 1) {
-                //printf("Replacing packet entry at index %d\n", index);
+                printf("Replacing packet entry at index %d\n", index);
                 replaceSaveEntry(index, pPacket);
             }
             else {
-                //printf("Discarding new packet\n");
+                printf("Discarding new packet\n");
                 discardPacket(pPacket);
             }
         }
     }
-		//print_all_hitcounts();
+    pthread_mutex_unlock(&HashLock);
+		print_all_hitcounts();
 }
 
 void print_all_hitcounts(){
@@ -265,8 +267,7 @@ void processPacket(struct Packet * pPacket) {
 
     /* Step 2: Do any packet payloads match up? */
 
-    pthread_mutex_lock(&HashLock);
+
     insert(pPacket);
-    pthread_mutex_unlock(&HashLock);
     return;
 }

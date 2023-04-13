@@ -27,7 +27,7 @@ int num_threads = 1;
 int window_size = 1;
 int stackSize = 0;
 int isdone = 0;
-int nThreadsConsumers = 5;
+int nThreadsConsumers = 1;
 int nThreadsProducers = 1;
 
 int numPcapFiles = 0;
@@ -111,16 +111,20 @@ void  *thread_consumer(void *arg){
 			pthread_mutex_unlock(&StackLock);
 			break;
 		}
-		struct Packet * poc;
-		poc = stack[stackSize-1];
-		stackSize--;
-		
-		if(poc != NULL){
+		// struct Packet * poc;
+		// poc = stack[stackSize-1];
+		// stackSize--;
+    
+        struct Packet * poc = (struct Packet *) malloc(sizeof(struct Packet));
+        poc = stack[stackSize-1];
+        stackSize--;
+
+        pthread_cond_broadcast(&producer_wait);
+        pthread_mutex_unlock(&StackLock);
+
+		if(poc->Data != NULL){
 			processPacket(poc);
 		}
-
-		pthread_cond_broadcast(&producer_wait);
-		pthread_mutex_unlock(&StackLock);
 	}
 	pthread_cond_broadcast(&consumer_wait);
 	// printf("Consumer done\n");
