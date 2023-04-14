@@ -1,4 +1,3 @@
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -118,75 +117,43 @@ uint16_t getNetPayloadSize(struct Packet * pPacket){
 }
 
 void insert(struct Packet * pPacket) {
+    
     uint8_t* buffer[getNetPayloadSize(pPacket)];
     memcpy(buffer, &pPacket->Data[pPacket->PayloadOffset], getNetPayloadSize(pPacket));
 
     uint32_t index = hashData((uint8_t *)buffer, getNetPayloadSize(pPacket));
-    
-    // for (int k = pPacket->PayloadOffset; k < pPacket->LengthIncluded; k++) {
-    //     printf("%d", pPacket->Data[k]);
-    // }
-    // printf("\n");
 
-    pthread_mutex_lock(&HashLock);
+
     if (TheHash[index].ThePacket == NULL) {
+        pthread_mutex_lock(&HashLock);
         //printf("Inserting new packet entry at index %d\n", index);
         TheHash[index].ThePacket = pPacket;
+        pthread_mutex_unlock(&HashLock);
+    }
+    else if (getNetPayloadSize(TheHash[index].ThePacket) == getNetPayloadSize(pPacket) && memcmp(&TheHash[index].ThePacket->Data[pPacket->PayloadOffset], &pPacket->Data[pPacket->PayloadOffset], pPacket->PayloadSize - pPacket->PayloadOffset) == 0){
+        pthread_mutex_lock(&HashLock);
+        TheHash[index].HitCount++;
+                            //printf("after: %d\n", TheHash[index].HitCount);
+        TheHash[index].RedundantBytes += pPacket->PayloadSize;
+
+        discardPacket(pPacket);
+        pthread_mutex_unlock(&HashLock);
     }
     else {
-        //if (TheHash[index].ThePacket->PayloadSize == pPacket->PayloadSize && memcmp(TheHash[index].ThePacket) ) { //&& getNetPayload(TheHash[index].ThePacket) == getNetPayload(pPacket)) {
-		// if(getNetPayloadSize(TheHash[index].ThePacket) == getNetPayloadSize(pPacket) && getNetPayload(TheHash[index].ThePacket) == getNetPayload(pPacket) ) {
-						//printf("Hit\n");
-						//printf("Should update hitcount %d\n", existing.HitCount);
-        if (getNetPayloadSize(TheHash[index].ThePacket) == getNetPayloadSize(pPacket) ) {// && memcmp(&TheHash[index].ThePacket->Data[TheHash[index].ThePacket->PayloadOffset], &pPacket->Data[pPacket->PayloadOffset], getNetPayloadSize(pPacket))) {
-            
-            int payloadOffset = pPacket->PayloadOffset;
-            int error = 0;
-            // for (int i = payloadOffset; i < pPacket->PayloadSize; i++) {
-            //     if (TheHash[index].ThePacket->Data[i] != pPacket->Data[i]){
-            //         error = 1;
-            //         break;
-            //     }
-            // }
-            if (memcmp(&TheHash[index].ThePacket->Data[payloadOffset], &pPacket->Data[payloadOffset], pPacket->PayloadSize - payloadOffset) != 0) {
-                error = 1;
-            }
-
-            if (!error){
-
-        
-                TheHash[index].HitCount++;
-                            //printf("after: %d\n", TheHash[index].HitCount);
-                TheHash[index].RedundantBytes += pPacket->PayloadSize;
-
-                discardPacket(pPacket);
-            }
-            else {
-                if (TheHash[index].HitCount < 1) {
-                    // printf("Replacing packet entry at index %d\n", index);
-                    replaceSaveEntry(index, pPacket);
-                }
-                else {
-                    // printf("Discarding new packet\n");
-                    discardPacket(pPacket);
-                }
-            }
+    
+        if (TheHash[index].HitCount < 1) {
+            // printf("Replacing packet entry at index %d\n", index);
+            pthread_mutex_lock(&HashLock);
+            replaceSaveEntry(index, pPacket);
+            pthread_mutex_unlock(&HashLock);
         }
         else {
-						//printf("Miss\n");
-						//printf("Should not update hitcount\n");
-            if (TheHash[index].HitCount < 1) {
-                // printf("Replacing packet entry at index %d\n", index);
-                replaceSaveEntry(index, pPacket);
-            }
-            else {
-                // printf("Discarding new packet\n");
-                discardPacket(pPacket);
-            }
+            // printf("Discarding new packet\n");
+            discardPacket(pPacket);
         }
+    
     }
-    pthread_mutex_unlock(&HashLock);
-		// print_all_hitcounts();
+    
 }
 
 void print_all_hitcounts(){
