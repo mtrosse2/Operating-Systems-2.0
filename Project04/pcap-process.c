@@ -118,7 +118,6 @@ uint16_t getNetPayloadSize(struct Packet * pPacket){
 }
 
 void insert(struct Packet * pPacket) {
-    pthread_mutex_lock(&HashLock);
     uint8_t* buffer[getNetPayloadSize(pPacket)];
     memcpy(buffer, &pPacket->Data[pPacket->PayloadOffset], getNetPayloadSize(pPacket));
 
@@ -129,6 +128,7 @@ void insert(struct Packet * pPacket) {
     // }
     // printf("\n");
 
+    pthread_mutex_lock(&HashLock);
     if (TheHash[index].ThePacket == NULL) {
         //printf("Inserting new packet entry at index %d\n", index);
         TheHash[index].ThePacket = pPacket;
