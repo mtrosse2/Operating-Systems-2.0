@@ -88,7 +88,6 @@ void tallyProcessing() {
 
     }
     free(TheHash);
-
     return;
 }
 
@@ -114,7 +113,7 @@ uint16_t getNetPayload(struct Packet * pPacket){
 }
 
 uint16_t getNetPayloadSize(struct Packet * pPacket){
-		return pPacket->LengthIncluded - pPacket->PayloadOffset;
+	return pPacket->LengthIncluded - pPacket->PayloadOffset;
 }
 
 void insert(struct Packet * pPacket) {
