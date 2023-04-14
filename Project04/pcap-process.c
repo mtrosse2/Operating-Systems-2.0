@@ -8,9 +8,9 @@
 
 #include "pcap-process.h"
 
-#define MAX_KEY_LEN 100
+// #define MAX_KEY_LEN 100
 #define MAX_VALUE_LEN 100
-#define TABLE_SIZE 1000
+#define TABLE_SIZE 997
 
 /* How many packets have we seen? */
 uint32_t        gPacketSeenCount;
@@ -92,51 +92,85 @@ void tallyProcessing() {
 }
 
 // https://en.wikipedia.org/wiki/Jenkins_hash_function
-uint16_t jenkins_16bit(uint16_t key) {
-    uint16_t hash = 0;
-    hash += key;
-    hash += hash << 10;
-    hash ^= hash >> 6;
+uint32_t hashData(uint8_t * key, size_t length) {
+    size_t i = 0;
+    uint32_t hash = 0;
+    while (i != length) {
+        hash += key[i++];
+        hash += hash << 10;
+        hash ^= hash >> 6;
+    }
     hash += hash << 3;
     hash ^= hash >> 11;
     hash += hash << 15;
-    return hash;
+    return (uint32_t) hash % TABLE_SIZE;
 }
 
-u_int16_t hashData(int netPayload) {
-    return (unsigned int) (jenkins_16bit(netPayload) % TABLE_SIZE);
-}
+// uint8_t* getNetPayload(struct Packet * pPacket){
 
-uint16_t getNetPayload(struct Packet * pPacket){
-    return pPacket->Data[pPacket->PayloadOffset];
-		//return pPacket->LengthIncluded - pPacket->PayloadOffset;
-}
+//     uint8_t* buffer[getNetPayloadSize(pPacket)];
+//     return memcpy(buffer, pPacket->Data[pPacket->PayloadOffset]);
+// 		//return pPacket->LengthIncluded - pPacket->PayloadOffset;
+// }
 
 uint16_t getNetPayloadSize(struct Packet * pPacket){
 	return pPacket->LengthIncluded - pPacket->PayloadOffset;
 }
 
 void insert(struct Packet * pPacket) {
-    u_int16_t index = hashData(getNetPayload(pPacket));
     pthread_mutex_lock(&HashLock);
+    uint8_t* buffer[getNetPayloadSize(pPacket)];
+    memcpy(buffer, &pPacket->Data[pPacket->PayloadOffset], getNetPayloadSize(pPacket));
 
-    // struct PacketEntry existing = TheHash[index];
+    uint32_t index = hashData((uint8_t *)buffer, getNetPayloadSize(pPacket));
+    
+    // for (int k = pPacket->PayloadOffset; k < pPacket->LengthIncluded; k++) {
+    //     printf("%d", pPacket->Data[k]);
+    // }
+    // printf("\n");
 
     if (TheHash[index].ThePacket == NULL) {
         //printf("Inserting new packet entry at index %d\n", index);
         TheHash[index].ThePacket = pPacket;
     }
     else {
-				//printf("Conflict at index: %d\n", index);
         //if (TheHash[index].ThePacket->PayloadSize == pPacket->PayloadSize && memcmp(TheHash[index].ThePacket) ) { //&& getNetPayload(TheHash[index].ThePacket) == getNetPayload(pPacket)) {
-					if(getNetPayloadSize(TheHash[index].ThePacket) == getNetPayloadSize(pPacket) && getNetPayload(TheHash[index].ThePacket) == getNetPayload(pPacket) ) {
+		// if(getNetPayloadSize(TheHash[index].ThePacket) == getNetPayloadSize(pPacket) && getNetPayload(TheHash[index].ThePacket) == getNetPayload(pPacket) ) {
 						//printf("Hit\n");
 						//printf("Should update hitcount %d\n", existing.HitCount);
-            TheHash[index].HitCount++;
-						//printf("after: %d\n", TheHash[index].HitCount);
-            TheHash[index].RedundantBytes += pPacket->PayloadSize;
+        if (getNetPayloadSize(TheHash[index].ThePacket) == getNetPayloadSize(pPacket) ) {// && memcmp(&TheHash[index].ThePacket->Data[TheHash[index].ThePacket->PayloadOffset], &pPacket->Data[pPacket->PayloadOffset], getNetPayloadSize(pPacket))) {
+            
+            int payloadOffset = pPacket->PayloadOffset;
+            int error = 0;
+            // for (int i = payloadOffset; i < pPacket->PayloadSize; i++) {
+            //     if (TheHash[index].ThePacket->Data[i] != pPacket->Data[i]){
+            //         error = 1;
+            //         break;
+            //     }
+            // }
+            if (memcmp(&TheHash[index].ThePacket->Data[payloadOffset], &pPacket->Data[payloadOffset], pPacket->PayloadSize - payloadOffset) != 0) {
+                error = 1;
+            }
 
-            discardPacket(pPacket);
+            if (!error){
+
+        
+                TheHash[index].HitCount++;
+                            //printf("after: %d\n", TheHash[index].HitCount);
+                TheHash[index].RedundantBytes += pPacket->PayloadSize;
+
+                discardPacket(pPacket);
+            }
+            else {
+                if (TheHash[index].HitCount < 1) {
+                    // printf("Replacing packet entry at index %d\n", index);
+                    replaceSaveEntry(index, pPacket);
+                }
+                else {
+                    // printf("Discarding new packet\n");
+                    discardPacket(pPacket);
+                }
+            }
         }
         else {
 						//printf("Miss\n");
