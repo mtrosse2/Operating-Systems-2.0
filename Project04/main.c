@@ -16,14 +16,14 @@ char * strdup(const char *s);
 #define MAX_PCAP_FILES 20
 #define MAX_FILE_LEN 40
 #define OUR_MAX_PACKETS 0
-#define STACK_MAX_SIZE 7
+#define STACK_MAX_SIZE 10
 
 struct FilePcapInfo theInfo[MAX_PCAP_FILES];
 
 pthread_mutex_t StackLock;
 pthread_mutex_t FileLock;
 
-struct Packet *stack[8]; // need array type and size CHANGE LATER
+struct Packet *stack[STACK_MAX_SIZE];
 pthread_cond_t consumer_wait;
 pthread_cond_t producer_wait;
 int window_size = 1;
@@ -58,13 +58,10 @@ char* extension(char* filename) {
 
 
 void * thread_producer(void *pThreadData){
-	// struct ThreadDataProduce * pData;
-	// pData = (struct ThreadDataProduce *) pThreadData;
-    //pFileInfo = malloc(sizeof(struct FilePcapInfo));
-	// pFileInfo = (struct FilePcapInfo *) pData->PcapInfo;
 
     while (isdone != numPcapFiles) {
-        //printf("locking\n");
+
+        // Set producer thread to read one file each
         pthread_mutex_lock(&FileLock);
 
         struct FilePcapInfo * pFileInfo;
@@ -82,7 +79,6 @@ void * thread_producer(void *pThreadData){
 
         /* Default is to not flip due to endian-ness issues */
         pFileInfo->EndianFlip = 0;
-
         /* Reset the counters */
         pFileInfo->Packets = 0;
         pFileInfo->BytesRead = 0;
@@ -93,8 +89,6 @@ void * thread_producer(void *pThreadData){
 		    printf("Could not open file\nExiting...\n");
 		    exit(-2);
 	    }
-        //printf("file opened\n");
-        // printf("opening file\n");
 
         /* Read the front matter */
         if(!parsePcapFileStart(pTheFile, pFileInfo))
@@ -102,11 +96,13 @@ void * thread_producer(void *pThreadData){
             printf("* Error: Failed to parse front matter on pcap file %s\n", pFileInfo->FileName);
             return NULL;
         }
+
+        // Continue to read packets from file and add to shared stack
         while(!feof(pTheFile)){
-            //printf("reading file\n");
             pPacket = readNextPacket(pTheFile, pFileInfo);
             pthread_mutex_lock(&StackLock);
 
+            // wait while stack is full
             while(stackSize >= STACK_MAX_SIZE){
                 pthread_cond_wait(&producer_wait, &StackLock);
             }
@@ -124,21 +120,21 @@ void * thread_producer(void *pThreadData){
 	return NULL;
 }
 
-// not too sure what to return
+
 void  *thread_consumer(void *arg){
 	while(1){
+        // wait while the stack is empty
 		pthread_mutex_lock(&StackLock);
-		while(stackSize <= 0){	// while stack is empty
+		while(stackSize <= 0){
 			if (isdone == numPcapFiles) break;
 			pthread_cond_wait(&consumer_wait, &StackLock);
 		}
+
+        // exit when all producer threads are done reading files
 		if(isdone == numPcapFiles && stackSize <= 0){
 			pthread_mutex_unlock(&StackLock);
 			break;
 		}
-		// struct Packet * poc;
-		// poc = stack[stackSize-1];
-		// stackSize--;
     
         struct Packet * poc = (struct Packet *) malloc(sizeof(struct Packet));
         poc = stack[stackSize-1];
@@ -147,12 +143,12 @@ void  *thread_consumer(void *arg){
         pthread_cond_broadcast(&producer_wait);
         pthread_mutex_unlock(&StackLock);
 
+        // call process packet to add data to hash
 		if(poc->Data != NULL){
 			processPacket(poc);
 		}
 	}
 	pthread_cond_broadcast(&consumer_wait);
-	// printf("Consumer done\n");
 	return NULL;
 }
 
@@ -167,9 +163,6 @@ int main (int argc, char *argv[])
         printf("  FileName        Single file to process (if ending with .pcap)\n");
         printf("\n");
         printf("Optional Arguments:\n");
-        /* You should handle this argument but make this a lower priority when 
-           writing this code to handle this 
-         */
         printf("  -threads N       Number of threads to use (2 to 8)\n");
         /* Note that you do not need to handle this argument in your code */
         printf("  -window  W       Window of bytes for partial matching (64 to 512)\n");
@@ -182,26 +175,24 @@ int main (int argc, char *argv[])
 	pthread_cond_init(&consumer_wait, NULL);
 	pthread_cond_init(&producer_wait, NULL);
     pthread_mutex_init(&FileLock,0);
-
-   //struct FilePcapInfo * theInfo = (struct FilePcapInfo *) malloc(sizeof(struct FilePcapInfo) * MAX_PCAP_FILES);
    
    char buffer[MAX_FILE_LEN];
 
 	// PARSE COMMAND LINE ARGUMENTS
-    int isPcapFile = 0;
+    int isPcapFile = 0, fileRead = 0;
 	int i = 1;
 	while (i < argc){
         char* ext = extension(argv[i]);
         
         // handle pcap file
         if (strcmp(ext, "pcap") == 0) {
-            printf("here");
             theInfo[numPcapFiles].FileName = argv[i];
             theInfo[numPcapFiles].EndianFlip = 0;
             theInfo[numPcapFiles].BytesRead = 0;
             theInfo[numPcapFiles].Packets = 0;
             theInfo[numPcapFiles].MaxPackets = OUR_MAX_PACKETS;
             isPcapFile = 1;
+            fileRead = 1;
 
             numPcapFiles++;
         }
@@ -212,6 +203,7 @@ int main (int argc, char *argv[])
                 fprintf(stderr, "Error: Unable to open file '%s'\n", argv[i]);
                 exit(-1);
             }
+            fileRead = 1;
             while (fgets(buffer, MAX_FILE_LEN, fp) != NULL && numPcapFiles < MAX_PCAP_FILES) {
                 if (strcmp(buffer, "\n") == 0) {
                     memset(buffer, 0, sizeof(buffer));
@@ -271,18 +263,19 @@ int main (int argc, char *argv[])
             printf("  FileName        Single file to process (if ending with .pcap)\n");
             printf("\n");
             printf("Optional Arguments:\n");
-            /* You should handle this argument but make this a lower priority when 
-            writing this code to handle this 
-            */
             printf("  -threads N       Number of threads to use (2 to 8)\n");
-            /* Note that you do not need to handle this argument in your code */
             printf("  -window  W       Window of bytes for partial matching (64 to 512)\n");
             printf("       If not specified, the optimal setting will be used\n");
             return -1;
         }
         i++;
 	}
+    if (!fileRead) {
+        printf("Error: must enter an input file\n");
+        exit(-1);
+    }
 
+    // Optimally allocate producer and consumer threads based on the number of pcap files read in and the thread argument specified
     if ((numPcapFiles != 1) && (nThreads > numPcapFiles)) {
         nThreadsProducers = numPcapFiles;
         nThreadsConsumers = nThreads - numPcapFiles;
@@ -302,22 +295,20 @@ int main (int argc, char *argv[])
 
     pthread_t * pThreadConsumers;
     pthread_t * pThreadProducers;
-    pThreadConsumers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsConsumers ); // Need to change this to number of consumers later
-    pThreadProducers = (pthread_t *) malloc(sizeof(pthread_t *) * numPcapFiles);
+    pThreadConsumers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsConsumers );
+    pThreadProducers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsProducers );
     
-    //struct ThreadDataProduce * pThreadData[nThreadsProducers]; // Change to number of producers
-    
+    // start consumer threads
     for(int k=0; k < nThreadsConsumers; k++){
         pthread_create(pThreadConsumers+k, NULL, &thread_consumer, NULL); 
     }
 
-    for (i = 0; i < numPcapFiles; i++) {
-        // pThreadData[i] = malloc(sizeof(struct ThreadDataProduce));
-        // pThreadData[i]->ThreadID = i;
-        // pThreadData[i]->PcapInfo = &theInfo[i];
+    // start producer threads
+    for (i = 0; i < nThreadsProducers; i++) {
         pthread_create(pThreadProducers+i, NULL, thread_producer, NULL);
     }
 
+    // join consumer threads
     for(int j = 0; j < nThreadsConsumers; j++) {
         pthread_join(pThreadConsumers[j], NULL);
     }
@@ -332,9 +323,6 @@ int main (int argc, char *argv[])
     }
 
     /* Output the statistics */
-
-    // printf("Parsing of file %s complete\n", argv[1]);
-
     printf("  Total Packets Parsed:    %d\n", gPacketSeenCount);
     printf("  Total Bytes   Parsed:    %lu\n", (unsigned long) gPacketSeenBytes);
     printf("  Total Packets Duplicate: %d\n", gPacketHitCount);

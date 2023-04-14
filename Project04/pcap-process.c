@@ -8,8 +8,8 @@
 #include "pcap-process.h"
 
 // #define MAX_KEY_LEN 100
-#define MAX_VALUE_LEN 100
-#define TABLE_SIZE 997
+// #define MAX_VALUE_LEN 100
+#define TABLE_SIZE 9973
 
 /* How many packets have we seen? */
 uint32_t        gPacketSeenCount;
@@ -22,8 +22,6 @@ uint64_t        gPacketHitBytes;
 
 struct PacketEntry * TheHash;
 pthread_mutex_t HashLock;
-
-void print_all_hitcounts();
 
 void initializeProcessing() {
     // initialize stats
@@ -39,6 +37,7 @@ void initializeProcessing() {
         return;
     }
 
+    // initialize the hash lock
     pthread_mutex_init(&HashLock, 0);
 
     // initialize the hash table
@@ -52,10 +51,7 @@ void initializeProcessing() {
 }
 
 void replaceSaveEntry(int index, struct Packet * pPacket) {
-    // struct PacketEntry existing = TheHash[index];
-
     // update globals with entry being replaced
-		// printf("Updating HitCount by %d\n", TheHash[index].HitCount);
     gPacketHitCount += TheHash[index].HitCount;
     gPacketHitBytes += TheHash[index].RedundantBytes;
 
@@ -105,43 +101,46 @@ uint32_t hashData(uint8_t * key, size_t length) {
     return (uint32_t) hash % TABLE_SIZE;
 }
 
+// return the size of the data payload to be read
 uint16_t getNetPayloadSize(struct Packet * pPacket){
 	return pPacket->LengthIncluded - pPacket->PayloadOffset;
 }
 
+// insert new packet into hash table
 void insert(struct Packet * pPacket) {
     
     uint8_t* buffer[getNetPayloadSize(pPacket)];
+
+    // copy the packet data starting form the offset into a buffer
     memcpy(buffer, &pPacket->Data[pPacket->PayloadOffset], getNetPayloadSize(pPacket));
 
+    // hash the data in the buffer to determine the index in the hash
     uint32_t index = hashData((uint8_t *)buffer, getNetPayloadSize(pPacket));
 
 
-    if (TheHash[index].ThePacket == NULL) {
+    if (TheHash[index].ThePacket == NULL) { // if there is nothing at the index just insert the new packet
         pthread_mutex_lock(&HashLock);
-        //printf("Inserting new packet entry at index %d\n", index);
         TheHash[index].ThePacket = pPacket;
         pthread_mutex_unlock(&HashLock);
     }
-    else if (getNetPayloadSize(TheHash[index].ThePacket) == getNetPayloadSize(pPacket) && memcmp(&TheHash[index].ThePacket->Data[pPacket->PayloadOffset], &pPacket->Data[pPacket->PayloadOffset], pPacket->PayloadSize - pPacket->PayloadOffset) == 0){
+    else if (getNetPayloadSize(TheHash[index].ThePacket) == getNetPayloadSize(pPacket) 
+                && memcmp(&TheHash[index].ThePacket->Data[pPacket->PayloadOffset], &pPacket->Data[pPacket->PayloadOffset], pPacket->PayloadSize - pPacket->PayloadOffset) == 0){
+        
+        // if size and data payloads are the same update the hit count and redundant byes
         pthread_mutex_lock(&HashLock);
         TheHash[index].HitCount++;
-                            //printf("after: %d\n", TheHash[index].HitCount);
         TheHash[index].RedundantBytes += pPacket->PayloadSize;
-
         discardPacket(pPacket);
         pthread_mutex_unlock(&HashLock);
     }
     else {
-    
+        // if the sizes and data are not the same evict the existing packet if the hit count is less than 1, otherwise evict the new packet
         if (TheHash[index].HitCount < 1) {
-            // printf("Replacing packet entry at index %d\n", index);
             pthread_mutex_lock(&HashLock);
             replaceSaveEntry(index, pPacket);
             pthread_mutex_unlock(&HashLock);
         }
         else {
-            // printf("Discarding new packet\n");
             discardPacket(pPacket);
         }
     
@@ -149,19 +148,8 @@ void insert(struct Packet * pPacket) {
     
 }
 
-void print_all_hitcounts(){
-	int i;
-	printf("--------------------------------------------------------\n");
-	for(i = 0; i < TABLE_SIZE; i++){
-		if (TheHash[i].ThePacket != NULL){
-			printf("%d, ", TheHash[i].HitCount);
-		}
-	}
-	printf("\n--------------------------------------------------------\n");
-}
-
 void processPacket(struct Packet * pPacket) {
-        uint16_t        PayloadOffset;
+    uint16_t        PayloadOffset;
 
     PayloadOffset = 0;
 
@@ -258,9 +246,8 @@ void processPacket(struct Packet * pPacket) {
     pPacket->PayloadOffset = PayloadOffset;
     pPacket->PayloadSize = NetPayload;
 
-    /* Step 2: Do any packet payloads match up? */
 
-
+    // call insert to handle updating the hash data structure with the packet being processed
     insert(pPacket);
     return;
 }

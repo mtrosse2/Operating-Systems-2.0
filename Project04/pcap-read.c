@@ -51,18 +51,18 @@ char parsePcapFileStart (FILE * pTheFile, struct FilePcapInfo * pFileInfo)
 	 *   A union allows us to represent a block of machine in different 
      *   ways.  We will also use this in Project 6. 
 	 */
-	union {
-  		uint32_t a;
-  		uint8_t  b[4];
-  	} u;
+	// union {
+  	// 	uint32_t a;
+  	// 	uint8_t  b[4];
+  	// } u;
 
 	/* If we set the 32 bit value to 1
 	 *   On a big endian machine, it would be 0x00 00 00 01
 	 *   On a little endian machine, it is 0x01 00 00 00 
 	 * 
 	 */
-	u.a = 1;
-  	char bigEndian = u.b[3];
+	// u.a = 1;
+  	// char bigEndian = u.b[3];
 
 	if(nMagicNum == 0xa1b2c3d4) {
 		pFileInfo->EndianFlip = 0;
