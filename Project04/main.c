@@ -284,7 +284,7 @@ int main (int argc, char *argv[])
 
     /* Output the statistics */
 
-    printf("Parsing of file %s complete\n", argv[1]);
+    // printf("Parsing of file %s complete\n", argv[1]);
 
     printf("  Total Packets Parsed:    %d\n", gPacketSeenCount);
     printf("  Total Bytes   Parsed:    %lu\n", (unsigned long) gPacketSeenBytes);

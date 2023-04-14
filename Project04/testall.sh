@@ -1,4 +1,4 @@
-echo "Testing testSmall.pcap"
+echo "Testing TestSmall.pcap"
 echo "-----------------------------------"
 ./redextract data/TestSmall.pcap
 echo ""
@@ -14,7 +14,7 @@ echo "Testing testFile2.pcap"
 echo "-----------------------------------"
 ./redextract data/testFile2.pcap
 echo ""
-echo "Testing biggerFiles.txt"
+echo "Testing biggerFile.txt"
 echo "-----------------------------------"
 ./redextract input/biggerFiles.txt
 echo ""
