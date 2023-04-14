@@ -34,7 +34,8 @@ When running each of the provided input files:
     <li>Test.pcap: 0.34% Duplicate Percent</li>
     <li>testFile.pcap: 0.00% Duplicate Percent</li>
     <li>testFile2.pcap: 0.14% Duplicate Percent</li>
-
+</ul>
+<ul>
     <li>biggerFile.txt (ie. testFile2.pcap x3): 43.73% Duplicate Percent</li>
     <li>doubleTest.txt (ie. testFile.pcap x2): 45.63% Duplicate Percent</li>
     <li>singleTest.txt (ie. testFile.pcap x1): 0.00% Duplicate Percent </li>
