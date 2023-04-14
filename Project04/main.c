@@ -13,22 +13,26 @@ char * strdup(const char *s);
 #include "pcap-read.h"
 #include "pcap-process.h"
 
-#define MAX_PCAP_FILES 4
+#define MAX_PCAP_FILES 20
 #define MAX_FILE_LEN 40
 #define OUR_MAX_PACKETS 0
 #define STACK_MAX_SIZE 7
 
+struct FilePcapInfo theInfo[MAX_PCAP_FILES];
+
 pthread_mutex_t StackLock;
+pthread_mutex_t FileLock;
 
 struct Packet *stack[8]; // need array type and size CHANGE LATER
 pthread_cond_t consumer_wait;
 pthread_cond_t producer_wait;
-int num_threads = 1;
 int window_size = 1;
 int stackSize = 0;
 int isdone = 0;
+int nThreads = 3;
 int nThreadsConsumers = 1;
-// int nThreadsProducers = 1;
+int nThreadsProducers = 1;
+int fileIndex = 0;
 
 int numPcapFiles = 0;
 
@@ -54,49 +58,65 @@ char* extension(char* filename) {
 
 
 void * thread_producer(void *pThreadData){
-	struct ThreadDataProduce * pData;
-	pData = (struct ThreadDataProduce *) pThreadData;
+	// struct ThreadDataProduce * pData;
+	// pData = (struct ThreadDataProduce *) pThreadData;
 	struct FilePcapInfo * pFileInfo;
-	pFileInfo = (struct FilePcapInfo *) pData->PcapInfo;
+    //pFileInfo = malloc(sizeof(struct FilePcapInfo));
+	// pFileInfo = (struct FilePcapInfo *) pData->PcapInfo;
 	
 	FILE * pTheFile;
 	struct Packet * pPacket;
 
-	/* Default is to not flip due to endian-ness issues */
-	pFileInfo->EndianFlip = 0;
+    while (isdone != numPcapFiles) {
+        //printf("locking\n");
+        pthread_mutex_lock(&FileLock);
 
-	/* Reset the counters */
-	pFileInfo->Packets = 0;
-	pFileInfo->BytesRead = 0;
+        if (fileIndex == numPcapFiles) {
+            pthread_mutex_unlock(&FileLock);
+            break;
+        }
+        pFileInfo = &theInfo[fileIndex];
+        fileIndex++;
 
-	/* Open the file and its respective front matter */
-	pTheFile = fopen(pFileInfo->FileName, "r");
-    // printf("opening file\n");
+        pthread_mutex_unlock(&FileLock);
 
-	/* Read the front matter */
-	if(!parsePcapFileStart(pTheFile, pFileInfo))
-	{
-		printf("* Error: Failed to parse front matter on pcap file %s\n", pFileInfo->FileName);
-		return NULL;
-	}
-	while(!feof(pTheFile)){
-		pPacket = readNextPacket(pTheFile, pFileInfo);
-		pthread_mutex_lock(&StackLock);
+        /* Default is to not flip due to endian-ness issues */
+        pFileInfo->EndianFlip = 0;
 
-		while(stackSize >= STACK_MAX_SIZE){
-			pthread_cond_wait(&producer_wait, &StackLock);
-		}
+        /* Reset the counters */
+        pFileInfo->Packets = 0;
+        pFileInfo->BytesRead = 0;
 
-		stack[stackSize] = pPacket;
-		stackSize++;
-		pthread_cond_signal(&consumer_wait);
-		
-		pthread_mutex_unlock(&StackLock);
-	}
-	isdone++;
-	pthread_cond_signal(&consumer_wait);
-	pthread_mutex_unlock(&StackLock);
-	fclose(pTheFile);
+        /* Open the file and its respective front matter */
+        pTheFile = fopen(pFileInfo->FileName, "r");
+        //printf("file opened\n");
+        // printf("opening file\n");
+
+        /* Read the front matter */
+        if(!parsePcapFileStart(pTheFile, pFileInfo))
+        {
+            printf("* Error: Failed to parse front matter on pcap file %s\n", pFileInfo->FileName);
+            return NULL;
+        }
+        while(!feof(pTheFile)){
+            //printf("reading file\n");
+            pPacket = readNextPacket(pTheFile, pFileInfo);
+            pthread_mutex_lock(&StackLock);
+
+            while(stackSize >= STACK_MAX_SIZE){
+                pthread_cond_wait(&producer_wait, &StackLock);
+            }
+
+            stack[stackSize] = pPacket;
+            stackSize++;
+            pthread_cond_broadcast(&consumer_wait);
+            pthread_mutex_unlock(&StackLock);
+        }
+        fclose(pTheFile);
+        isdone++;
+        pthread_cond_broadcast(&consumer_wait);
+        pthread_mutex_unlock(&StackLock);
+    }
 	return NULL;
 }
 
@@ -108,9 +128,7 @@ void  *thread_consumer(void *arg){
 			if (isdone == numPcapFiles) break;
 			pthread_cond_wait(&consumer_wait, &StackLock);
 		}
-
 		if(isdone == numPcapFiles && stackSize <= 0){
-			pthread_cond_broadcast(&consumer_wait);
 			pthread_mutex_unlock(&StackLock);
 			break;
 		}
@@ -118,8 +136,7 @@ void  *thread_consumer(void *arg){
 		// poc = stack[stackSize-1];
 		// stackSize--;
     
-        //struct Packet * poc = (struct Packet *) malloc(sizeof(struct Packet));
-    		struct Packet * poc = (struct Packet *) malloc(sizeof(struct Packet));
+        struct Packet * poc = (struct Packet *) malloc(sizeof(struct Packet));
         poc = stack[stackSize-1];
         stackSize--;
 
@@ -130,7 +147,7 @@ void  *thread_consumer(void *arg){
 			processPacket(poc);
 		}
 	}
-	//pthread_cond_broadcast(&consumer_wait);
+	pthread_cond_broadcast(&consumer_wait);
 	// printf("Consumer done\n");
 	return NULL;
 }
@@ -160,8 +177,10 @@ int main (int argc, char *argv[])
 	pthread_mutex_init(&StackLock,0);
 	pthread_cond_init(&consumer_wait, NULL);
 	pthread_cond_init(&producer_wait, NULL);
+    pthread_mutex_init(&FileLock,0);
 
-   struct FilePcapInfo * theInfo = (struct FilePcapInfo *) malloc(sizeof(struct FilePcapInfo) * MAX_PCAP_FILES);
+   //struct FilePcapInfo * theInfo = (struct FilePcapInfo *) malloc(sizeof(struct FilePcapInfo) * MAX_PCAP_FILES);
+   
    char buffer[MAX_FILE_LEN];
 
 	// PARSE COMMAND LINE ARGUMENTS
@@ -204,18 +223,19 @@ int main (int argc, char *argv[])
         }
         // handle threads argument
         else if (strcmp(argv[i], "-threads") == 0) {
+            //printf("reading nthreads\n");
             i++;
             if (i == argc) {
                 fprintf(stderr, "Error: Must enter number of threads!\n");
                 exit(-1);
             }
             int n = atoi(argv[i]);
-            if (n < 1 || n > 7) {
-                fprintf(stderr, "Error: Please enter a valid integer between 1 and 7 to specify the number of threads!\n");
+            if (n < 2 || n > 8) {
+                fprintf(stderr, "Error: Please enter a valid integer between 2 and 8 to specify the number of threads!\n");
                 exit(-1);
             }
             else {
-                nThreadsConsumers = n;
+                nThreads = n;
             }
         }
         // handle window argument
@@ -256,6 +276,18 @@ int main (int argc, char *argv[])
     // for (i = 0; i < numPcapFiles; i++) {
     //     printf("%s\n", theInfo[i].FileName);
     // }
+    if ((numPcapFiles != 1) && (nThreads > numPcapFiles)) {
+        nThreadsProducers = numPcapFiles;
+        nThreadsConsumers = nThreads - numPcapFiles;
+    }
+    else if (numPcapFiles == 1) {
+        nThreadsProducers = 1;
+        nThreadsConsumers = nThreads - 1;
+    }
+    else {
+        nThreadsConsumers = 1;
+        nThreadsProducers = nThreads - nThreadsConsumers;
+    }
 		
     printf("MAIN: Initializing the table for redundancy extraction\n");
     initializeProcessing(DEFAULT_TABLE_SIZE);
@@ -266,27 +298,18 @@ int main (int argc, char *argv[])
     pThreadConsumers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsConsumers ); // Need to change this to number of consumers later
     pThreadProducers = (pthread_t *) malloc(sizeof(pthread_t *) * numPcapFiles);
     
-    struct ThreadDataProduce * pThreadData[numPcapFiles]; // Change to number of producers
+    //struct ThreadDataProduce * pThreadData[nThreadsProducers]; // Change to number of producers
     
-    for (i = 0; i < numPcapFiles; i++) {
-        pThreadData[i] = malloc(sizeof(struct ThreadDataProduce));
-        pThreadData[i]->ThreadID = i;
-        pThreadData[i]->PcapInfo = &theInfo[i];
-        pthread_create(pThreadProducers+i, NULL, thread_producer, (void *) pThreadData[i]);
-    }
-
     for(int k=0; k < nThreadsConsumers; k++){
         pthread_create(pThreadConsumers+k, NULL, &thread_consumer, NULL); 
     }
 
-		/*
     for (i = 0; i < numPcapFiles; i++) {
-        pThreadData[i] = malloc(sizeof(struct ThreadDataProduce));
-        pThreadData[i]->ThreadID = i;
-        pThreadData[i]->PcapInfo = &theInfo[i];
-        pthread_create(pThreadProducers+i, NULL, thread_producer, (void *) pThreadData[i]);
+        // pThreadData[i] = malloc(sizeof(struct ThreadDataProduce));
+        // pThreadData[i]->ThreadID = i;
+        // pThreadData[i]->PcapInfo = &theInfo[i];
+        pthread_create(pThreadProducers+i, NULL, thread_producer, NULL);
     }
-		*/
 
     for(int j = 0; j < nThreadsConsumers; j++) {
         pthread_join(pThreadConsumers[j], NULL);

@@ -187,6 +187,11 @@ char readPcapFile (struct FilePcapInfo * pFileInfo)
 	/* Open the file and its respective front matter */
 	pTheFile = fopen(pFileInfo->FileName, "r");
 
+	if(pTheFile == NULL){
+		printf("Could not open file\nExiting...\n");
+		exit(-2);
+	}
+
 	/* Read the front matter */
 	if(!parsePcapFileStart(pTheFile, pFileInfo))
 	{
