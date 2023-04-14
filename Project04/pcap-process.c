@@ -53,10 +53,7 @@ void initializeProcessing() {
 }
 
 void replaceSaveEntry(int index, struct Packet * pPacket) {
-    // struct PacketEntry existing = TheHash[index];
 
-    // update globals with entry being replaced
-		// printf("Updating HitCount by %d\n", TheHash[index].HitCount);
     gPacketHitCount += TheHash[index].HitCount;
     gPacketHitBytes += TheHash[index].RedundantBytes;
 
@@ -106,87 +103,44 @@ uint32_t hashData(uint8_t * key, size_t length) {
     return (uint32_t) hash % TABLE_SIZE;
 }
 
-// uint8_t* getNetPayload(struct Packet * pPacket){
-
-//     uint8_t* buffer[getNetPayloadSize(pPacket)];
-//     return memcpy(buffer, pPacket->Data[pPacket->PayloadOffset]);
-// 		//return pPacket->LengthIncluded - pPacket->PayloadOffset;
-// }
-
 uint16_t getNetPayloadSize(struct Packet * pPacket){
 	return pPacket->LengthIncluded - pPacket->PayloadOffset;
 }
 
 void insert(struct Packet * pPacket) {
+    
+    // find index of new packet
     uint8_t* buffer[getNetPayloadSize(pPacket)];
     memcpy(buffer, &pPacket->Data[pPacket->PayloadOffset], getNetPayloadSize(pPacket));
-
     uint32_t index = hashData((uint8_t *)buffer, getNetPayloadSize(pPacket));
-    
-    // for (int k = pPacket->PayloadOffset; k < pPacket->LengthIncluded; k++) {
-    //     printf("%d", pPacket->Data[k]);
-    // }
-    // printf("\n");
 
-    pthread_mutex_lock(&HashLock);
+    // pthread_mutex_lock(&HashLock);
     if (TheHash[index].ThePacket == NULL) {
-        //printf("Inserting new packet entry at index %d\n", index);
+        pthread_mutex_lock(&HashLock);
         TheHash[index].ThePacket = pPacket;
+        pthread_mutex_unlock(&HashLock);
+    }
+    else if (getNetPayloadSize(TheHash[index].ThePacket) == getNetPayloadSize(pPacket) 
+                && memcmp(&TheHash[index].ThePacket->Data[pPacket->PayloadOffset], &pPacket->Data[pPacket->PayloadOffset], pPacket->PayloadSize - pPacket->PayloadOffset) == 0) {
+        
+        pthread_mutex_lock(&HashLock);
+        TheHash[index].HitCount++;
+        TheHash[index].RedundantBytes += pPacket->PayloadSize;
+        pthread_mutex_unlock(&HashLock);
+
+        discardPacket(pPacket);
     }
     else {
-        //if (TheHash[index].ThePacket->PayloadSize == pPacket->PayloadSize && memcmp(TheHash[index].ThePacket) ) { //&& getNetPayload(TheHash[index].ThePacket) == getNetPayload(pPacket)) {
-		// if(getNetPayloadSize(TheHash[index].ThePacket) == getNetPayloadSize(pPacket) && getNetPayload(TheHash[index].ThePacket) == getNetPayload(pPacket) ) {
-						//printf("Hit\n");
-						//printf("Should update hitcount %d\n", existing.HitCount);
-        if (getNetPayloadSize(TheHash[index].ThePacket) == getNetPayloadSize(pPacket) ) {// && memcmp(&TheHash[index].ThePacket->Data[TheHash[index].ThePacket->PayloadOffset], &pPacket->Data[pPacket->PayloadOffset], getNetPayloadSize(pPacket))) {
-            
-            int payloadOffset = pPacket->PayloadOffset;
-            int error = 0;
-            // for (int i = payloadOffset; i < pPacket->PayloadSize; i++) {
-            //     if (TheHash[index].ThePacket->Data[i] != pPacket->Data[i]){
-            //         error = 1;
-            //         break;
-            //     }
-            // }
-            if (memcmp(&TheHash[index].ThePacket->Data[payloadOffset], &pPacket->Data[payloadOffset], pPacket->PayloadSize - payloadOffset) != 0) {
-                error = 1;
-            }
-
-            if (!error){
-
-        
-                TheHash[index].HitCount++;
-                            //printf("after: %d\n", TheHash[index].HitCount);
-                TheHash[index].RedundantBytes += pPacket->PayloadSize;
-
-                discardPacket(pPacket);
-            }
-            else {
-                if (TheHash[index].HitCount < 1) {
-                    // printf("Replacing packet entry at index %d\n", index);
-                    replaceSaveEntry(index, pPacket);
-                }
-                else {
-                    // printf("Discarding new packet\n");
-                    discardPacket(pPacket);
-                }
-            }
+        if (TheHash[index].HitCount < 1) {
+            pthread_mutex_lock(&HashLock);
+            replaceSaveEntry(index, pPacket);
+            pthread_mutex_unlock(&HashLock);
         }
         else {
-						//printf("Miss\n");
-						//printf("Should not update hitcount\n");
-            if (TheHash[index].HitCount < 1) {
-                // printf("Replacing packet entry at index %d\n", index);
-                replaceSaveEntry(index, pPacket);
-            }
-            else {
-                // printf("Discarding new packet\n");
-                discardPacket(pPacket);
-            }
+            discardPacket(pPacket);
         }
     }
-    pthread_mutex_unlock(&HashLock);
-		// print_all_hitcounts();
+    // pthread_mutex_unlock(&HashLock);
 }
 
 void print_all_hitcounts(){
@@ -201,7 +155,7 @@ void print_all_hitcounts(){
 }
 
 void processPacket(struct Packet * pPacket) {
-        uint16_t        PayloadOffset;
+    uint16_t        PayloadOffset;
 
     PayloadOffset = 0;
 
@@ -299,8 +253,6 @@ void processPacket(struct Packet * pPacket) {
     pPacket->PayloadSize = NetPayload;
 
     /* Step 2: Do any packet payloads match up? */
-
-
     insert(pPacket);
     return;
 }
