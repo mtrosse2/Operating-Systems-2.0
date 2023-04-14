@@ -60,16 +60,16 @@ char* extension(char* filename) {
 void * thread_producer(void *pThreadData){
 	// struct ThreadDataProduce * pData;
 	// pData = (struct ThreadDataProduce *) pThreadData;
-	struct FilePcapInfo * pFileInfo;
     //pFileInfo = malloc(sizeof(struct FilePcapInfo));
 	// pFileInfo = (struct FilePcapInfo *) pData->PcapInfo;
-	
-	FILE * pTheFile;
-	struct Packet * pPacket;
 
     while (isdone != numPcapFiles) {
         //printf("locking\n");
         pthread_mutex_lock(&FileLock);
+
+        struct FilePcapInfo * pFileInfo;
+        FILE * pTheFile;
+	    struct Packet * pPacket;
 
         if (fileIndex == numPcapFiles) {
             pthread_mutex_unlock(&FileLock);
@@ -89,6 +89,10 @@ void * thread_producer(void *pThreadData){
 
         /* Open the file and its respective front matter */
         pTheFile = fopen(pFileInfo->FileName, "r");
+        if(pTheFile == NULL){
+		    printf("Could not open file\nExiting...\n");
+		    exit(-2);
+	    }
         //printf("file opened\n");
         // printf("opening file\n");
 
@@ -184,17 +188,20 @@ int main (int argc, char *argv[])
    char buffer[MAX_FILE_LEN];
 
 	// PARSE COMMAND LINE ARGUMENTS
+    int isPcapFile = 0;
 	int i = 1;
 	while (i < argc){
         char* ext = extension(argv[i]);
         
         // handle pcap file
         if (strcmp(ext, "pcap") == 0) {
+            printf("here");
             theInfo[numPcapFiles].FileName = argv[i];
             theInfo[numPcapFiles].EndianFlip = 0;
             theInfo[numPcapFiles].BytesRead = 0;
             theInfo[numPcapFiles].Packets = 0;
             theInfo[numPcapFiles].MaxPackets = OUR_MAX_PACKETS;
+            isPcapFile = 1;
 
             numPcapFiles++;
         }
@@ -213,7 +220,9 @@ int main (int argc, char *argv[])
                 if (buffer[strlen(buffer)-1] == '\n') {
                     buffer[strlen(buffer)-1] = '\0';
                 }
-                theInfo[numPcapFiles].FileName = buffer;
+                theInfo[numPcapFiles].FileName = (char *) malloc(sizeof(char) * MAX_FILE_LEN);
+                strcpy(theInfo[numPcapFiles].FileName, buffer);
+ 
                 theInfo[numPcapFiles].EndianFlip = 0;
                 theInfo[numPcapFiles].BytesRead = 0;
                 theInfo[numPcapFiles].Packets = 0;
@@ -273,9 +282,7 @@ int main (int argc, char *argv[])
         }
         i++;
 	}
-    // for (i = 0; i < numPcapFiles; i++) {
-    //     printf("%s\n", theInfo[i].FileName);
-    // }
+
     if ((numPcapFiles != 1) && (nThreads > numPcapFiles)) {
         nThreadsProducers = numPcapFiles;
         nThreadsConsumers = nThreads - numPcapFiles;
@@ -317,6 +324,12 @@ int main (int argc, char *argv[])
 
     printf("Summarizing the processed entries\n");
     tallyProcessing();
+
+    if (!isPcapFile) {
+        for (i = 0; i < numPcapFiles; i++) {
+            free(theInfo[i].FileName);
+        }
+    }
 
     /* Output the statistics */
 

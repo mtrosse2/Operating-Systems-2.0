@@ -105,13 +105,6 @@ uint32_t hashData(uint8_t * key, size_t length) {
     return (uint32_t) hash % TABLE_SIZE;
 }
 
-// uint8_t* getNetPayload(struct Packet * pPacket){
-
-//     uint8_t* buffer[getNetPayloadSize(pPacket)];
-//     return memcpy(buffer, pPacket->Data[pPacket->PayloadOffset]);
-// 		//return pPacket->LengthIncluded - pPacket->PayloadOffset;
-// }
-
 uint16_t getNetPayloadSize(struct Packet * pPacket){
 	return pPacket->LengthIncluded - pPacket->PayloadOffset;
 }
