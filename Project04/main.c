@@ -206,12 +206,12 @@ int main (int argc, char *argv[])
                 exit(-1);
             }
             int n = atoi(argv[i]);
-            if (n < 1 || n > 8) {
-                fprintf(stderr, "Error: Please enter a valid integer between 1 and 8 to specify the number of threads!\n");
+            if (n < 1 || n > 7) {
+                fprintf(stderr, "Error: Please enter a valid integer between 1 and 7 to specify the number of threads!\n");
                 exit(-1);
             }
             else {
-                num_threads = n;
+                nThreadsConsumers = n;
             }
         }
         // handle window argument
