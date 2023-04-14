@@ -28,7 +28,7 @@ int window_size = 1;
 int stackSize = 0;
 int isdone = 0;
 int nThreadsConsumers = 1;
-int nThreadsProducers = 1;
+// int nThreadsProducers = 1;
 
 int numPcapFiles = 0;
 
@@ -89,13 +89,14 @@ void * thread_producer(void *pThreadData){
 
 		stack[stackSize] = pPacket;
 		stackSize++;
-		pthread_cond_broadcast(&consumer_wait);
+		pthread_cond_signal(&consumer_wait);
+		
 		pthread_mutex_unlock(&StackLock);
 	}
-	fclose(pTheFile);
 	isdone++;
-	pthread_cond_broadcast(&consumer_wait);
+	pthread_cond_signal(&consumer_wait);
 	pthread_mutex_unlock(&StackLock);
+	fclose(pTheFile);
 	return NULL;
 }
 
@@ -107,7 +108,9 @@ void  *thread_consumer(void *arg){
 			if (isdone == numPcapFiles) break;
 			pthread_cond_wait(&consumer_wait, &StackLock);
 		}
+
 		if(isdone == numPcapFiles && stackSize <= 0){
+			pthread_cond_broadcast(&consumer_wait);
 			pthread_mutex_unlock(&StackLock);
 			break;
 		}
@@ -115,7 +118,8 @@ void  *thread_consumer(void *arg){
 		// poc = stack[stackSize-1];
 		// stackSize--;
     
-        struct Packet * poc = (struct Packet *) malloc(sizeof(struct Packet));
+        //struct Packet * poc = (struct Packet *) malloc(sizeof(struct Packet));
+    		struct Packet * poc = (struct Packet *) malloc(sizeof(struct Packet));
         poc = stack[stackSize-1];
         stackSize--;
 
@@ -126,7 +130,7 @@ void  *thread_consumer(void *arg){
 			processPacket(poc);
 		}
 	}
-	pthread_cond_broadcast(&consumer_wait);
+	//pthread_cond_broadcast(&consumer_wait);
 	// printf("Consumer done\n");
 	return NULL;
 }
@@ -262,18 +266,27 @@ int main (int argc, char *argv[])
     pThreadConsumers = (pthread_t *) malloc(sizeof(pthread_t *) * nThreadsConsumers ); // Need to change this to number of consumers later
     pThreadProducers = (pthread_t *) malloc(sizeof(pthread_t *) * numPcapFiles);
     
-    struct ThreadDataProduce * pThreadData[nThreadsProducers]; // Change to number of producers
+    struct ThreadDataProduce * pThreadData[numPcapFiles]; // Change to number of producers
     
-    for(int k=0; k < nThreadsConsumers; k++){
-        pthread_create(pThreadConsumers+k, NULL, &thread_consumer, NULL); 
-    }
-
     for (i = 0; i < numPcapFiles; i++) {
         pThreadData[i] = malloc(sizeof(struct ThreadDataProduce));
         pThreadData[i]->ThreadID = i;
         pThreadData[i]->PcapInfo = &theInfo[i];
         pthread_create(pThreadProducers+i, NULL, thread_producer, (void *) pThreadData[i]);
     }
+
+    for(int k=0; k < nThreadsConsumers; k++){
+        pthread_create(pThreadConsumers+k, NULL, &thread_consumer, NULL); 
+    }
+
+		/*
+    for (i = 0; i < numPcapFiles; i++) {
+        pThreadData[i] = malloc(sizeof(struct ThreadDataProduce));
+        pThreadData[i]->ThreadID = i;
+        pThreadData[i]->PcapInfo = &theInfo[i];
+        pthread_create(pThreadProducers+i, NULL, thread_producer, (void *) pThreadData[i]);
+    }
+		*/
 
     for(int j = 0; j < nThreadsConsumers; j++) {
         pthread_join(pThreadConsumers[j], NULL);
