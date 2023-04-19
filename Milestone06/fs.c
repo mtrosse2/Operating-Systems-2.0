@@ -49,6 +49,49 @@ void fs_debug()
 	printf("    %d blocks\n",block.super.nblocks);
 	printf("    %d inode blocks\n",block.super.ninodeblocks);
 	printf("    %d inodes\n",block.super.ninodes);
+
+	int i;
+	for (i = 1; i < block.super.ninodeblocks + 1; i++) {
+		disk_read(i, block.data);
+
+		int j;	// loop through the inode blocks
+		for (j = 0; j < INODES_PER_BLOCK; j++) {
+			struct fs_inode inode;
+			memcpy(&inode, &block.inode[j], sizeof(struct fs_inode));
+
+			if (inode.isvalid) {	// if an inode block is valid print its information
+				printf("inode %d:\n", ((i-1)*INODES_PER_BLOCK) + j);
+				printf("	size: %d\n", inode.size);
+
+				printf("	direct blocks: ");	// print direct blocks
+				int k = 0;
+				while ((k*sizeof(block.data)) < inode.size && k < POINTERS_PER_INODE) {
+					printf("%d ", inode.direct[k]);
+					k++;
+				}
+				printf("\n");
+
+				if ((k*sizeof(block.data)) < inode.size) {	// if size is bigger go to indirect blocks
+					printf("	indirect block: %d\n", inode.indirect);
+					
+					union fs_block indirect_block;
+					disk_read(inode.indirect, indirect_block.data);
+					printf("	indirect data blocks: ");
+					
+					int m = 0;	// print indirect blocks
+					while ((k*sizeof(block.data)) < inode.size && m < POINTERS_PER_BLOCK) {
+						int indirect;
+						memcpy(&indirect, &block.data[m*sizeof(indirect)], sizeof(indirect));
+						printf("%d ", indirect);
+						m++;
+						k++;
+					}
+					printf("\n");
+				}
+
+			}
+		}
+	}
 }
 
 int fs_mount()
