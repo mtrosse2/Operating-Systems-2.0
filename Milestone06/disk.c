@@ -1,92 +1,102 @@
+/* disk.c : Disk emulation implementation file for Project 6
+*************************************************************
+* Do not modify this file.
+* Make all of your changes to fs.c instead.
+*************************************************************
+* Last Updated: 2023-04-23
+*/
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
+#define _XOPEN_SOURCE 500L
 
 #include "disk.h"
 
-#define DISK_MAGIC 0xdeadbeef
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/types.h>
 
-static FILE *diskfile;
-static int nblocks=0;
-static int nreads=0;
-static int nwrites=0;
+extern ssize_t pread (int __fd, void *__buf, size_t __nbytes, off_t __offset);
+extern ssize_t pwrite (int __fd, const void *__buf, size_t __nbytes, off_t __offset);
 
-int disk_init( const char *filename, int n )
+
+struct disk {
+	int fd;
+	int block_size;
+	int nblocks;
+};
+
+struct disk * disk_open( const char *diskname, int nblocks )
 {
-	diskfile = fopen(filename,"r+");
-	if(!diskfile) diskfile = fopen(filename,"w+");
-	if(!diskfile) return 0;
+	struct disk *d;
 
-	ftruncate(fileno(diskfile),n*DISK_BLOCK_SIZE);
+	d = malloc(sizeof(*d));
+	if(!d) return 0;
 
-	nblocks = n;
-	nreads = 0;
-	nwrites = 0;
+	d->fd = open(diskname,O_CREAT|O_RDWR,0777);
+	if(d->fd<0) {
+		free(d);
+		return 0;
+	}
 
-	return 1;
+	d->block_size = BLOCK_SIZE;
+	d->nblocks = nblocks;
+
+	if(ftruncate(d->fd,d->nblocks*d->block_size)<0) {
+		close(d->fd);
+		free(d);
+		return 0;
+	}
+
+	return d;
 }
 
-int disk_size()
+void disk_write( struct disk *d, int block, const unsigned char *data )
 {
-	return nblocks;
-}
-
-static void sanity_check( int blocknum, const void *data )
-{
-	if(blocknum<0) {
-		printf("ERROR: blocknum (%d) is negative!\n",blocknum);
+	if(block<0 || block>=d->nblocks) {
+		fprintf(stderr,"disk_write: invalid block #%d\n",block);
 		abort();
 	}
 
-	if(blocknum>=nblocks) {
-		printf("ERROR: blocknum (%d) is too big!\n",blocknum);
-		abort();
-	}
-
-	if(!data) {
-		printf("ERROR: null data pointer!\n");
-		abort();
-	}
-}
-
-void disk_read( int blocknum, char *data )
-{
-	sanity_check(blocknum,data);
-
-	fseek(diskfile,blocknum*DISK_BLOCK_SIZE,SEEK_SET);
-
-	if(fread(data,DISK_BLOCK_SIZE,1,diskfile)==1) {
-		nreads++;
-	} else {
-		printf("ERROR: couldn't access simulated disk: %s\n",strerror(errno));
-		abort();
-	}
-}
-
-void disk_write( int blocknum, const char *data )
-{
-	sanity_check(blocknum,data);
-
-	fseek(diskfile,blocknum*DISK_BLOCK_SIZE,SEEK_SET);
-
-	if(fwrite(data,DISK_BLOCK_SIZE,1,diskfile)==1) {
-		nwrites++;
-	} else {
-		printf("ERROR: couldn't access simulated disk: %s\n",strerror(errno));
+	int actual = pwrite(d->fd,(char*)data,d->block_size,block*d->block_size);
+	if(actual!=d->block_size) {
+		fprintf(stderr,"disk_write: failed to write block #%d: %s\n",block,strerror(errno));
 		abort();
 	}
 }
 
-void disk_close()
+void disk_read( struct disk *d, int block, unsigned char *data )
 {
-	if(diskfile) {
-		printf("%d disk block reads\n",nreads);
-		printf("%d disk block writes\n",nwrites);
-		fclose(diskfile);
-		diskfile = 0;
+	if(block<0 || block>=d->nblocks) {
+		fprintf(stderr,"disk_read: invalid block #%d\n",block);
+		abort();
 	}
+
+	int actual = pread(d->fd,(char*)data,d->block_size,block*d->block_size);
+	if(actual!=d->block_size) {
+		fprintf(stderr,"disk_read: failed to read block #%d: %s\n",block,strerror(errno));
+		abort();
+	}
+}
+
+int disk_nblocks( struct disk *d )
+{
+	return d->nblocks;
+}
+
+void disk_close( struct disk *d )
+{
+	close(d->fd);
+	free(d);
+}
+
+extern struct disk * thedisk;
+
+/* For backwards compatibility */
+int disk_size ()
+{
+	return thedisk->nblocks;
 }
 
