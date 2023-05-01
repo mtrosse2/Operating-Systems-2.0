@@ -22,12 +22,6 @@ extern ssize_t pread (int __fd, void *__buf, size_t __nbytes, off_t __offset);
 extern ssize_t pwrite (int __fd, const void *__buf, size_t __nbytes, off_t __offset);
 
 
-struct disk {
-	int fd;
-	int block_size;
-	int nblocks;
-};
-
 struct disk * disk_open( const char *diskname, int nblocks )
 {
 	struct disk *d;

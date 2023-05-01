@@ -10,6 +10,12 @@ Make all of your changes to main.c instead.
 #define DISK_BLOCK_SIZE 4096
 #define BLOCK_SIZE      4096
 
+struct disk {
+	int fd;
+	int block_size;
+	int nblocks;
+};
+
 /*
 Create a new virtual disk in the file "filename", with the given number of blocks.
 Returns a pointer to a new disk object, or null on failure.
