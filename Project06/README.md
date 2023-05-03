@@ -1,0 +1,1 @@
+Note: We moved disk struct in disk.c into disk.h to prevent linking issue we were seeing. No other changes were made to disk.c or disk.h.
