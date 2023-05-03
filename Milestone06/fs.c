@@ -10,8 +10,10 @@ Make your change here.
 #include <stdint.h>
 #include <string.h>
 
+#define BITMAP_SIZE 2000
+
 extern struct disk *thedisk;
-int free_blocks[2000]; // zero is false, anything else true
+int free_blocks[BITMAP_SIZE]; // zero is false, anything else true
 // int free_inodes; // just call it 10,000 size throw error when you do a check when you go to mount it
 // ************************************
 int ld_inode( size_t inumber, struct fs_inode *node);
@@ -20,25 +22,25 @@ int scan_bitmap();
 int is_mounted = 0;
 
 
-int ld_inode( size_t inumber, struct fs_inode *node){
-		// search for block 
-    int inode_block = (int) ((inumber + INODES_PER_BLOCK - 1)/ INODES_PER_BLOCK);
+// int ld_inode( size_t inumber, struct fs_inode *node){
+// 		// search for block 
+//     int inode_block = (int) ((inumber + INODES_PER_BLOCK - 1)/ INODES_PER_BLOCK);
 
-    if (inode_block == 0){
-        inode_block = 1;
-    }
+//     if (inode_block == 0){
+//         inode_block = 1;
+//     }
     
-    int iOffset = inumber % INODES_PER_BLOCK;
+//     int iOffset = inumber % INODES_PER_BLOCK;
 
-    // read in inode block
-    union fs_block block;
-    disk_read(thedisk, inode_block, block.data);
+//     // read in inode block
+//     union fs_block block;
+//     disk_read(thedisk, inode_block, block.data);
 
-    //node = block.inodes[iOffset];
-    // copy to node pointer the inode info
-    memcpy(node, &block.inode[iOffset], sizeof(struct fs_inode));
-    return 1;
-}
+//     //node = block.inodes[iOffset];
+//     // copy to node pointer the inode info
+//     memcpy(node, &block.inode[iOffset], sizeof(struct fs_inode));
+//     return 1;
+// }
 
 int fs_save_inode(size_t inumber, struct fs_inode *node){
 
@@ -79,6 +81,17 @@ int scan_bitmap(/*number of blocks in file system */){
 
     return -1;
 }
+
+// int disk_full() {
+    
+//     int i;
+//     for (i = 0; i < BITMAP_SIZE; i++) {
+//         if (free_blocks[i] == 0) {
+//             return 0;
+//         }
+//     }
+//     return 1;
+// }
 
 // create a dump bitmap helper function
 
@@ -370,9 +383,7 @@ int fs_read( int inumber, char *data, int length, int offset )
         union fs_block block;
         // read in the block data 
         if (i < POINTERS_PER_INODE){
-            if (inode.direct){
-                disk_read(thedisk, inode.direct[i], block.data);
-            }
+            disk_read(thedisk, inode.direct[i], block.data);
         }
         else{
             if (inode.indirect){
@@ -417,90 +428,29 @@ int save_inode(size_t inumber, struct fs_inode *node) {
     return 1;
 }
 
-// try overriding existing file
-// try coping in too much stuff
-// error checking if you run out of space
-// int fs_write( int inumber, const char *data, int length, int offset )
-// {
-// 	struct fs_inode inode;
-//     if (!ld_inode(inumber, &inode)){
-// 		printf("ld_inode failed\n");
-//         return -1;
-//     }
+int ld_inode(size_t inumber, struct fs_inode *node){
 
-// 	union fs_block block;
-// 	int bytes_read = 0, free_data_block;
+    int inode_block = inumber / INODES_PER_BLOCK + 1;
+    int iOffset = inumber % INODES_PER_BLOCK;
 
-// 	int i = 0;	// For Direct Blocks
-// 	while (i < POINTERS_PER_INODE && bytes_read < length) {
-// 		if (inode.direct[i] == 0) {
-// 			free_data_block = scan_bitmap();
+    // read in inode block
+    union fs_block block;
+    disk_read(thedisk, inode_block, block.data);
 
-// 			// if search free list fails we need to do something !!!!
+    // copy to node pointer the inode info
+    memcpy(node, &block.inode[iOffset], sizeof(struct fs_inode));
+    return 1;
+}
 
-// 			memcpy(&block, &data[bytes_read], DISK_BLOCK_SIZE);
-
-// 			disk_write(thedisk, free_data_block, block.data);
-// 			inode.direct[i] = free_data_block;
-
-// 			if (length - offset < DISK_BLOCK_SIZE) {
-// 				bytes_read += length - offset;
-// 				inode.size += bytes_read;
-// 			}
-// 			else {
-// 				bytes_read += DISK_BLOCK_SIZE;
-// 				inode.size += bytes_read;
-// 			}
-// 		}
-// 		i++;
-// 	}
-	
-// 	if (bytes_read < length) {
-// 		if (inode.indirect == 0) {
-// 			int free_indirect_block = scan_bitmap();
-
-// 			// if free_indirect_block fails error check
-
-// 			inode.indirect = free_indirect_block;
-// 		}
-
-// 		int j = 0; // For Indirect Blocks
-// 		while (j < POINTERS_PER_BLOCK && bytes_read < length) {
-			
-// 			free_data_block = scan_bitmap();
-
-// 			free_indirect_block[j] = free_data_block;
-
-// 			disk_read(thedisk, free_indirect_block, &block)
-			
-			
-			
-// 			// memcpy(&block, data, DISK_BLOCK_SIZE);
-// 			// disk_write(thedisk, free_indirect_block, block.data);
-
-			
-
-
-
-// 			memcpy(&block, data, DISK_BLOCK_SIZE);
-
-// 			j++;
-// 		}
-// 	}
-
-
-// 	save_inode(inumber, &inode);
-// 	return bytes_read;
-// }
-
-
+/*
 int fs_write( int inumber, const char *data, int length, int offset )
 {
 	// check to make sure inode is valid
 	struct fs_inode inode;
-    if (!ld_inode( inumber, &inode)){
-		printf("ld_inode failed\n");
-        return 0;
+    ld_inode(inumber, &inode);
+    if (!inode.isvalid){
+		    printf("Invalid Write: inode %d must be created first\n", inumber);
+        return -1;
     }
 
     // initialize values. need new offsets and to get blocks 
@@ -522,16 +472,19 @@ int fs_write( int inumber, const char *data, int length, int offset )
     }
 
     // iterate through all blocks of given inode
-    for (int i = nblk; i < POINTERS_PER_BLOCK + POINTERS_PER_INODE; i++){           
+    for (int i = nblk; i < POINTERS_PER_BLOCK + POINTERS_PER_INODE; i++) {
+        printf("At beginning: %d\n", pnt_to_blk);
         // direct
         if (i < POINTERS_PER_INODE){
             pnt_to_blk = inode.direct[i];
+            printf("At direct: %d\n", pnt_to_blk);
         }
 				// indirect
         else{
             // if the indirect does not exist get free block to allocate
             if (!inode.indirect){
                 inode.indirect = scan_bitmap();
+                printf("Using inode indirect block%d\n", inode.indirect);
                 if (inode.indirect == -1){
                     break;
                 }
@@ -542,11 +495,13 @@ int fs_write( int inumber, const char *data, int length, int offset )
             }
             // retrieve the pointer from the ind block
             pnt_to_blk = indirect.pointers[i - POINTERS_PER_INODE];
+            printf("At indirect: %d\n", pnt_to_blk);
         }
 
         // allocate block if needed
         if (!pnt_to_blk){
             pnt_to_blk = scan_bitmap();
+            printf("At fresh one: %d\n", pnt_to_blk);
             if (pnt_to_blk == -1){
                 break;
             }   
@@ -597,4 +552,112 @@ int fs_write( int inumber, const char *data, int length, int offset )
     inode.size += byt_wrote;
 		save_inode(inumber, &inode);
     return byt_wrote; 
+}
+*/
+
+int fs_write( int inumber, const char *data, int length, int offset ) {
+    struct fs_inode inode;
+    ld_inode(inumber, &inode);
+    if (!inode.isvalid){
+		    printf("Invalid Write: inode %d must be created first\n", inumber);
+        return -1;
+    }
+
+    int nblk = offset / BLOCK_SIZE;
+    int bytesWritten = 0;
+
+    int numToCopy = 0;
+    int newOffset = offset % BLOCK_SIZE;
+
+    int pnt2blk = 0;
+
+    union fs_block emptyBlock = {{0}};
+    union fs_block indirect = {{0}};
+    union fs_block block = {{0}};
+
+    int newDataBlock = 0;
+
+    int done = 0, usingIndirect = 0;
+    while (bytesWritten < length && !done) {
+        for (int i = nblk; i < POINTERS_PER_BLOCK + POINTERS_PER_INODE; i++) {
+
+            if (i < POINTERS_PER_INODE) {
+                if (inode.direct[i] == 0) {
+                    newDataBlock = scan_bitmap();
+                    if (newDataBlock == -1) {
+                        done = 1;   // Need to break out of everything
+                        break;
+                    }
+                    inode.direct[i] = newDataBlock;
+                }
+                pnt2blk = inode.direct[i];
+            }
+            else {
+                if (!inode.indirect) {
+                    newDataBlock = scan_bitmap();
+                    printf("new block = %d", newDataBlock);
+                    if (newDataBlock == -1) {
+                        done = 1;   // Need to break out of everything
+                        break;
+                    }
+                    inode.indirect = newDataBlock;
+                    // clear indirect point block
+                    printf("Writing to disk block: %d\n", inode.indirect);
+                    disk_write(thedisk, inode.indirect, emptyBlock.data);
+                }
+                else {
+                    pnt2blk = indirect.pointers[i - POINTERS_PER_INODE];
+                    usingIndirect = 1;
+                }
+
+                disk_read(thedisk, inode.indirect, indirect.data);
+            }
+
+            
+
+            printf("Pointing to block: %d\n", pnt2blk);
+
+            // read the data at pnt2blk
+            disk_read(thedisk, pnt2blk, block.data);
+
+            
+            if ((BLOCK_SIZE - newOffset) <= (length - bytesWritten)) {
+                numToCopy = BLOCK_SIZE - newOffset;
+            }
+            else {
+                numToCopy = length - bytesWritten;
+            }
+
+            // copy new data to block
+            memcpy(block.data + newOffset, data + bytesWritten, numToCopy);
+
+            // write block to disk
+            printf("Writing to disk block: %d\n", pnt2blk);
+            disk_write(thedisk, pnt2blk, block.data);
+
+            // update indirect pointer info
+            if (usingIndirect) {
+                printf("Writing to disk block: %d\n", inode.indirect);
+                disk_write(thedisk, inode.indirect, indirect.data);
+            }
+
+            bytesWritten += numToCopy;
+            newOffset = 0;
+            usingIndirect = 0;
+
+            if (bytesWritten == length) {
+                done = 1;
+                break;
+            }
+        }
+    }
+
+    if (done && bytesWritten < length) {
+        printf("Warning: Disk is full!\n");
+    }
+
+    inode.size += bytesWritten;
+    save_inode(inumber, &inode);
+
+    return bytesWritten;
 }
