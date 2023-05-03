@@ -1,0 +1,316 @@
+1################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+2################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+3################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+4################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+1################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+2################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+3################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+4################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+
+	1################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+2################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+3################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+4################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+	1################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+2################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+3################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+4################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+1################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+2################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+3################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o
+    GCC=/usr/bin/gcc
+4################################
+simplefs: shell.o fs.o disk.o
+	$(GCC) shell.o fs.o disk.o -o simplefs
+
+shell.o: shell.c
+	$(GCC) -Wall shell.c -c -o shell.o -g
+
+fs.o: fs.c fs.h
+	$(GCC) -Wall fs.c -c -o fs.o -g
+
+disk.o: disk.c disk.h
+	$(GCC) -Wall disk.c -c -o disk.o -g
+
+clean:
+	rm simplefs disk.o fs.o shell.o

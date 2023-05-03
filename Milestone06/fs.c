@@ -21,27 +21,6 @@ int fs_save_inode( size_t inumber, struct fs_inode *node);
 int scan_bitmap();
 int is_mounted = 0;
 
-
-// int ld_inode( size_t inumber, struct fs_inode *node){
-// 		// search for block 
-//     int inode_block = (int) ((inumber + INODES_PER_BLOCK - 1)/ INODES_PER_BLOCK);
-
-//     if (inode_block == 0){
-//         inode_block = 1;
-//     }
-    
-//     int iOffset = inumber % INODES_PER_BLOCK;
-
-//     // read in inode block
-//     union fs_block block;
-//     disk_read(thedisk, inode_block, block.data);
-
-//     //node = block.inodes[iOffset];
-//     // copy to node pointer the inode info
-//     memcpy(node, &block.inode[iOffset], sizeof(struct fs_inode));
-//     return 1;
-// }
-
 int fs_save_inode(size_t inumber, struct fs_inode *node){
 
     // find blk. offset val
@@ -82,22 +61,6 @@ int scan_bitmap(/*number of blocks in file system */){
     return -1;
 }
 
-// int disk_full() {
-    
-//     int i;
-//     for (i = 0; i < BITMAP_SIZE; i++) {
-//         if (free_blocks[i] == 0) {
-//             return 0;
-//         }
-//     }
-//     return 1;
-// }
-
-// create a dump bitmap helper function
-
-// ************************************
-
-
 int fs_format()
 {
 	// check if it already has been mounted
@@ -109,9 +72,6 @@ int fs_format()
   block.super.nblocks = (int32_t) thedisk->nblocks;
   block.super.ninodeblocks = (int32_t) ((thedisk->nblocks + 9) / 10); // could do this with a function
   block.super.ninodes = block.super.ninodeblocks * INODES_PER_BLOCK;
-
-	// set block data to superblock
-  // memcpy(&block.data, &block.super, sizeof(fs_superblock)); // not nec
     
   // Write super block before clearing it
   disk_write(thedisk, 0, block.data);
@@ -245,12 +205,16 @@ int fs_mount()
     return 1;
 
 }
-// I never update a bitmap. Should this raise concern
 
 int fs_create() {
+
+    if (is_mounted == 0) {
+        return -1;
+    }
+
 	// get superblock info
-	union fs_block super_block;
-  disk_read(thedisk, 0, super_block.data);
+    union fs_block super_block;
+    disk_read(thedisk, 0, super_block.data);
   
 	// loop through inode blocks
   union fs_block inode_block;
@@ -290,7 +254,11 @@ int fs_create() {
 
 int fs_delete( int inumber )
 {
-		struct fs_inode node;
+	if (is_mounted == 0) {
+        return -1;
+    }
+    
+    struct fs_inode node;
     if (!ld_inode(inumber, &node)){
         return 0;
     }
@@ -344,6 +312,10 @@ int fs_getsize( int inumber )
 
 int fs_read( int inumber, char *data, int length, int offset )
 {
+    if (is_mounted == 0) {
+        return -1;
+    }
+
 	struct fs_inode inode;
     if (!ld_inode( inumber, &inode)){
         return -1;
@@ -556,6 +528,11 @@ int fs_write( int inumber, const char *data, int length, int offset )
 */
 
 int fs_write( int inumber, const char *data, int length, int offset ) {
+    
+    if (is_mounted == 0) {
+        return -1;
+    }
+    
     struct fs_inode inode;
     ld_inode(inumber, &inode);
     if (!inode.isvalid){
@@ -577,82 +554,76 @@ int fs_write( int inumber, const char *data, int length, int offset ) {
 
     int newDataBlock = 0;
 
-    int done = 0, usingIndirect = 0;
-    while (bytesWritten < length && !done) {
-        for (int i = nblk; i < POINTERS_PER_BLOCK + POINTERS_PER_INODE; i++) {
+    int i = nblk, usingIndirect = 0;
+    while (bytesWritten < length && i < POINTERS_PER_BLOCK + POINTERS_PER_INODE) {
 
-            if (i < POINTERS_PER_INODE) {
-                if (inode.direct[i] == 0) {
-                    newDataBlock = scan_bitmap();
-                    if (newDataBlock == -1) {
-                        done = 1;   // Need to break out of everything
-                        break;
-                    }
-                    inode.direct[i] = newDataBlock;
-                }
-                pnt2blk = inode.direct[i];
-            }
-            else {
-                if (!inode.indirect) {
-                    newDataBlock = scan_bitmap();
-                    printf("new block = %d", newDataBlock);
-                    if (newDataBlock == -1) {
-                        done = 1;   // Need to break out of everything
-                        break;
-                    }
-                    inode.indirect = newDataBlock;
-                    // clear indirect point block
-                    printf("Writing to disk block: %d\n", inode.indirect);
-                    disk_write(thedisk, inode.indirect, emptyBlock.data);
-                }
-                else {
-                    pnt2blk = indirect.pointers[i - POINTERS_PER_INODE];
-                    usingIndirect = 1;
-                }
-
-                disk_read(thedisk, inode.indirect, indirect.data);
-            }
-
-            
-
-            printf("Pointing to block: %d\n", pnt2blk);
-
-            // read the data at pnt2blk
-            disk_read(thedisk, pnt2blk, block.data);
-
-            
-            if ((BLOCK_SIZE - newOffset) <= (length - bytesWritten)) {
-                numToCopy = BLOCK_SIZE - newOffset;
-            }
-            else {
-                numToCopy = length - bytesWritten;
-            }
-
-            // copy new data to block
-            memcpy(block.data + newOffset, data + bytesWritten, numToCopy);
-
-            // write block to disk
-            printf("Writing to disk block: %d\n", pnt2blk);
-            disk_write(thedisk, pnt2blk, block.data);
-
-            // update indirect pointer info
-            if (usingIndirect) {
-                printf("Writing to disk block: %d\n", inode.indirect);
-                disk_write(thedisk, inode.indirect, indirect.data);
-            }
-
-            bytesWritten += numToCopy;
-            newOffset = 0;
-            usingIndirect = 0;
-
-            if (bytesWritten == length) {
-                done = 1;
+        if (i < POINTERS_PER_INODE) {
+            newDataBlock = scan_bitmap();
+            if (newDataBlock == -1) {
                 break;
             }
+            inode.direct[i] = newDataBlock;
+            pnt2blk = inode.direct[i];
         }
+        else {
+            if (!inode.indirect) {
+                newDataBlock = scan_bitmap();
+                if (newDataBlock == -1) {
+                    break;
+                }
+                inode.indirect = newDataBlock;
+
+                // printf("Writing to disk block: %d\n", inode.indirect);
+                disk_write(thedisk, inode.indirect, emptyBlock.data);
+                // clear the inode's indirect block
+                disk_read(thedisk, inode.indirect, indirect.data);
+            }
+            else {
+                disk_read(thedisk, inode.indirect, indirect.data);
+            }
+            usingIndirect = 1;
+            newDataBlock = scan_bitmap();
+            if (newDataBlock == -1) {
+                break;
+            }
+            pnt2blk = newDataBlock;
+            indirect.pointers[i - POINTERS_PER_INODE] = pnt2blk;
+        }
+
+        // read the data at pnt2blk
+        disk_read(thedisk, pnt2blk, block.data);
+
+        if ((BLOCK_SIZE - newOffset) <= (length - bytesWritten)) {
+            numToCopy = BLOCK_SIZE - newOffset;
+        }
+        else {
+            numToCopy = length - bytesWritten;
+        }
+
+        // copy new data to block
+        memcpy(block.data + newOffset, data + bytesWritten, numToCopy);
+
+        // write block to disk
+        // printf("Writing to disk block: %d\n", pnt2blk);
+        disk_write(thedisk, pnt2blk, block.data);
+
+        // update indirect pointer info
+        if (usingIndirect) {
+            // printf("Writing to indirect disk block: %d\n", inode.indirect);
+            disk_write(thedisk, inode.indirect, indirect.data);
+        }
+
+        bytesWritten += numToCopy;
+        newOffset = 0;
+        usingIndirect = 0;
+
+        if (bytesWritten == length) {
+            break;
+        }
+        i++;
     }
 
-    if (done && bytesWritten < length) {
+    if (bytesWritten < length) {
         printf("Warning: Disk is full!\n");
     }
 
